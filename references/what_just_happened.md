@@ -346,12 +346,17 @@ multi-model spec audit. The gate caught it as a WARN ("No ### BUG-NNN headings f
 BUGS.md", emitted to `quality/results/quality-gate.log`) — that WARN is the signal.
 
 **Gate witness (REQUIRED — do not omit, do not paraphrase):** paste the
-final two lines of `quality/results/quality-gate.log` verbatim:
+LAST `RESULT: GATE …` line of `quality/results/quality-gate.log` and the
+`Total:` line immediately preceding it, verbatim (not the log's final two
+lines — a verdict explanation and a `::QPB::` sentinel follow the RESULT
+line; compatibility fork, CC-04):
 
-    Total: N FAIL, M WARN
+    Total: 0 FAIL, M WARN
     RESULT: GATE PASSED
-       (or: RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
-        or: RESULT: GATE FAILED — N substantive issue(s) must be fixed)
+       (or: Total: N CLEANUP, M WARN
+            RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
+        or: Total: N FAIL (S substantive, R record-keeping), M WARN
+            RESULT: GATE FAILED — S substantive issue(s) must be fixed)
 
 In this State S case the gate typically shows `0 FAIL` with `M≥1 WARN`
 and `RESULT: GATE PASSED` — but a GATE PASSED here does NOT mean a
@@ -379,8 +384,8 @@ pick a weaker model than the playbook needs.
 
 The review ran and the bug findings are real and stand on their own — only
 the audit trail has record-keeping gaps. Use this state, NOT State B, when
-`quality/results/quality-gate.log` ends with `RESULT: GATE PASSED WITH
-CLEANUP NEEDED`. (State letter is **CN** because **C** is the code-only
+the last `RESULT: GATE …` line of `quality/results/quality-gate.log` is
+`RESULT: GATE PASSED WITH CLEANUP NEEDED`. (State letter is **CN** because **C** is the code-only
 Phase-1 state; instruction 089c said "State C" but that label was taken —
 see the classifier prose for Rule 7.) Substitute the real numbers from
 `quality/BUGS.md`, `quality/REQUIREMENTS.md`, and the gate output.
@@ -412,9 +417,12 @@ The review is done; the bug findings stand on their own. These gaps are
 about the audit trail, not about your code's quality.
 
 **Gate witness (REQUIRED — do not omit, do not paraphrase):** paste the
-final two lines of `quality/results/quality-gate.log` verbatim:
+LAST `RESULT: GATE …` line of `quality/results/quality-gate.log` and the
+`Total:` line immediately preceding it, verbatim (not the log's final two
+lines — a verdict explanation and a `::QPB::` sentinel follow the RESULT
+line; compatibility fork, CC-04):
 
-    Total: N FAIL, M WARN
+    Total: K CLEANUP, M WARN
     RESULT: GATE PASSED WITH CLEANUP NEEDED — K audit record-keeping gap(s)
 
 (If that log is empty or the `RESULT:` line is anything else, this is the
@@ -447,12 +455,17 @@ Full baseline run complete. Found N confirmed bugs (writeups in `quality/writeup
 patches in `quality/patches/`, TDD verification in `quality/results/`).
 
 **Gate witness (REQUIRED — do not omit, do not paraphrase):** paste the
-final two lines of `quality/results/quality-gate.log` verbatim:
+LAST `RESULT: GATE …` line of `quality/results/quality-gate.log` and the
+`Total:` line immediately preceding it, verbatim (not the log's final two
+lines — a verdict explanation and a `::QPB::` sentinel follow the RESULT
+line; compatibility fork, CC-04):
 
-    Total: N FAIL, M WARN
+    Total: 0 FAIL, M WARN
     RESULT: GATE PASSED
-       (or: RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
-        or: RESULT: GATE FAILED — N substantive issue(s) must be fixed)
+       (or: Total: N CLEANUP, M WARN
+            RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
+        or: Total: N FAIL (S substantive, R record-keeping), M WARN
+            RESULT: GATE FAILED — S substantive issue(s) must be fixed)
 
 Read the `RESULT:` line and report per the 089c F15 three-state rule:
 
@@ -523,18 +536,19 @@ upstream when submitting PRs.
 
 ### State R — Recheck complete
 
-Substitute `M` / `K` / `J` with the FIXED / OPEN / INCONCLUSIVE counts from `quality/results/recheck-results.json`.
+Substitute `M` / `P` / `K` / `J` with the `summary` counts `fixed` / `partially_fixed` / `still_open` / `inconclusive` from `quality/results/recheck-results.json` (per-bug status values FIXED / PARTIALLY_FIXED / STILL_OPEN / INCONCLUSIVE; the gate checks the counts against the per-bug results — compatibility fork, CC-17).
 
 ```
 ## What just happened
 
-Recheck verified your fixes. **M bugs FIXED**, K still OPEN, J INCONCLUSIVE. Detailed
+Recheck verified your fixes. **M bugs FIXED**, P PARTIALLY_FIXED, K STILL_OPEN,
+J INCONCLUSIVE. Detailed
 results in `quality/results/recheck-results.json` and the plain-English summary in
 `quality/results/recheck-summary.md`.
 
 ### What to do next
 
-Address the K still-open bugs. Open PRs for the M fixed bugs (the regression-test
+Address the K still-open and P partially-fixed bugs. Open PRs for the M fixed bugs (the regression-test
 patches in `quality/patches/` are portable — adopt them upstream so the maintainer can
 verify the fix). After the next fix batch, say `recheck` again.
 ```
@@ -608,7 +622,7 @@ gate log carries none of the five strings, the cycle was executed
 - **Do not** lead with QPB-internal phrasing. The first sentence of "What just happened" should make sense to an adopter reading their first run.
 - **Do not** write the "What to do next" sentence without a concrete next prompt or shell command. The whole purpose is to remove "what do I type now?" friction.
 - **Do not** rewrite this decision tree inline in SKILL.md or in any phase prompt. Single-source: SKILL.md and phase prompts point at this file; this file owns the templates.
-- **Do not** add new run states beyond the thirteen defined here (P1, P2, P3, P4, P5, C, G, E, S, B, I, F, R) without an instruction-authorized scope change. New states queue for v1.6.0+.
+- **Do not** add new run states beyond the fourteen defined here (P1, P2, P3, P4, P5, C, G, E, S, CN, B, I, F, R) without an instruction-authorized scope change. New states queue for v1.6.0+.
 - **Do not** invoke this contract for the out-of-scope cases listed in "Scope and contract" above (`aborted_missing_docs` shell abort; SIGKILL; OS crash). Those terminals have no agent in the loop.
 
 ## Cross-references

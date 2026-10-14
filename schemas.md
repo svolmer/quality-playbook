@@ -1254,14 +1254,18 @@ The per-run `INDEX.md` (at `quality/INDEX.md` for the current run, and
 copied to `quality/previous_runs/<ts>/INDEX.md` at archive time —
 v1.5.4 Phase 3.6.2 (B-19) renamed the archive directory from the
 legacy `quality/runs/`; legacy archives at the old path remain
-readable) is a structured record of run metadata. It is produced by
-the orchestrator (not the gate), which alone knows phase timing and
-model assignments. The gate validates that the file exists and that
+readable) is a structured record of run metadata. It is never produced
+by the gate. In Mode B the runner/orchestrator writes it (it tracks
+phase timing and model assignments). In Mode A there is no runner: the
+agent writes it in Phase 5 with `gate_verdict: "pending"`, and the
+parent replaces that with the receipted verdict in Phase 6 via
+`python3 -m bin.quality_playbook finalize-index .` (compatibility fork,
+CC-03/CC-12). The gate validates that the file exists and that
 every required field below is present and non-empty.
 
 | Field                    | Type            | Required | Notes                                                                                                                       |
 |--------------------------|-----------------|----------|------------------------------------------------------------------------------------------------------------------------------|
-| `schema_version`         | string          | yes (v1.5.4+) | INDEX schema generation. `"2.0"` for v1.5.4+ runs (carries `target_role_breakdown`); `"1.0"` (or absent) for legacy v1.5.3 runs that carried `target_project_type`. |
+| `schema_version`         | string          | yes (v1.5.4+) | INDEX schema generation. `"2.0"` for v1.5.4+ runs (carries `target_role_breakdown`); `"1.0"` (or absent) for legacy v1.5.3 runs that carried `target_project_type`. Absent is a legacy read path only: new runs MUST emit `"2.0"`, and `validate_phase_artifacts --phase 5/6` FAILs any other value (compatibility fork, CC-11). |
 | `run_timestamp_start`    | string          | yes      | ISO 8601 with explicit timezone. Run start.                                                                                  |
 | `run_timestamp_end`      | string          | yes      | ISO 8601 with explicit timezone. Run end.                                                                                    |
 | `duration_seconds`       | integer         | yes      | End minus start, rounded to whole seconds.                                                                                   |
@@ -1286,8 +1290,9 @@ from the Phase-1 file role tagging (`quality/exploration_role_map.json`,
 described in `docs/design/QPB_v1.5.4_Design.md` Part 1). Both shapes
 remain readable by the gate:
 
-  - **`schema_version: "2.0"`** (or missing on a NEW run produced by
-    v1.5.4+ tooling) → the gate requires `target_role_breakdown` and
+  - **`schema_version: "2.0"`** (the gate also reads a missing value
+    this way, but a missing value is never valid on a new run — the A-15
+    validator FAILs it at Phase 5/6) → the gate requires `target_role_breakdown` and
     accepts `null` for the stub INDEX written before Phase 1 produces
     the role map.
   - **`schema_version: "1.0"`** (or any pre-2.0 string) → the gate
@@ -1310,11 +1315,21 @@ it happens, the file becomes a v1.5.4 INDEX and gains the
 
 The format is markdown with a fenced JSON block carrying the structured
 fields (the gate parses the JSON block, not the surrounding prose). The
-exact markdown shape is defined in `SKILL.md` so the gate has one place to
-look for required fields (this file) and one place to look for rendering
-(SKILL.md).
+exact markdown shape is defined in `phase_prompts/phase5.md` ("Write
+quality/INDEX.md") so the gate has one place to look for required fields
+(this file) and one place to look for rendering (the Phase 5 prompt;
+compatibility fork, CC-12).
 
 Missing or empty fields fail §10 invariant #10.
+
+**Completion contract (compatibility fork, CC-11).** The gate's INDEX
+check is weaker than the A-15 validator: it FAILs a missing INDEX only
+on v1.5.0+ manifest runs, does not check the `gate_verdict` value, and
+reads an absent `schema_version` as `"2.0"`. Neither tool is relaxed.
+A run is complete only when the gate's last `RESULT: GATE …` line is
+`RESULT: GATE PASSED` or `RESULT: GATE PASSED WITH CLEANUP NEEDED` AND
+`python3 -m bin.validate_phase_artifacts . --phase 6` prints
+`RESULT: VALIDATION PASSED (phase 6)` (`phase_prompts/phase6.md`).
 
 ---
 

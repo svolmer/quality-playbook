@@ -10,12 +10,20 @@
 > to spawn a fresh-context sub-agent with the auditor prompt and paste
 > its verbatim verdict — a shared-context executor verifying its own
 > work fabricated PASS across virtio/express/httpx. This guide remains
-> the canonical Phase 6 protocol (the gate-verdict witness, the "No
-> PASS claim without N=0 FAILs" rule, the `validate_phase_artifacts
-> --phase 6` mandate); it is the content the auditor sub-agent carries
-> out, and the parent and this guide must stay coherent.
+> the canonical Phase 6 protocol (the gate-verdict witness, the
+> three-state "no PASS / PASS WITH CLEANUP NEEDED claim if any
+> substantive FAILs" rule, the `validate_phase_artifacts --phase 6`
+> mandate); it is the content the auditor sub-agent carries out, and
+> the parent and this guide must stay coherent.
+>
+> **Who fixes (compatibility fork, CC-07).** The auditor is read-only
+> (`phase_prompts/phase6_auditor.md`: "your job is to REPORT it, not
+> fix it"). Wherever a step below finds a failure, the auditor
+> records it as FAIL in its audit notes; it never edits artifacts.
+> Fixing is executor work, described in "Fixes after a failing
+> audit" at the end of this guide.
 
-**v1.5.7 instrumentation:** Append `phase_start phase=6` now. At phase end, cross-validate (`quality/BUGS.md` non-empty with `^## BUG-` sections AND `quality/INDEX.md` updated with `gate_verdict` field) then append `phase_end phase=6`. After Phase 6 closes, append `run_end status=success` (or `aborted` / `failed` if applicable).
+**v1.5.7 instrumentation:** Append `phase_start phase=6` now. At phase end, cross-validate per `references/run_state_schema.md` cross-validation row 6 (gate log non-empty, PROGRESS.md `Terminal Gate Verification` section, `quality/INDEX.md` `summary.gate_verdict` final — never `"pending"`) then append `phase_end phase=6`. BUG headings in `quality/BUGS.md` are `^### BUG-` (compatibility fork, CC-06). After Phase 6 closes, append `run_end status=success` (or `aborted` / `failed` if applicable).
 
 > **Required references for this phase:**
 > - `references/verification.md` — 45 self-check benchmarks
@@ -35,7 +43,7 @@ echo $? > quality/results/mechanical-verify.exit
 
 Execute this command. The command must be `python quality/mechanical/verify.py` — and inside `verify.py`, each extraction MUST be a `subprocess.run` of the ORIGINAL shell pipeline used at Phase 1. Do not substitute a model-authored Python reimplementation of the extraction (`python -c '<reimplementation>'`, `re.findall`, `str.split`, or any Python parsing that recreates the extraction logic is FORBIDDEN), do not read the artifact file and assert on its contents, do not skip this step. The shell pipeline (operating on actual source bytes) is the witness; Python is only the orchestrator (subprocess invocation, diff, exit code). Substituting the extraction with model-authored Python defeats the v1.3.23 invariant.
 
-Record the exit code. If non-zero, **Phase 6 fails immediately.** Do not proceed to further steps. Go back to the extraction step: delete the mismatched `*_cases.txt`, re-run the extraction command with a fresh shell redirect, re-verify, and update all downstream artifacts that cited the old extraction.
+Record the exit code. If non-zero, **Phase 6 fails immediately.** Do not proceed to further steps (the auditor reports FAIL and returns). The executor's fix (see "Fixes after a failing audit"): go back to the extraction step: delete the mismatched `*_cases.txt`, re-run the extraction command with a fresh shell redirect, re-verify, and update all downstream artifacts that cited the old extraction.
 
 Record in PROGRESS.md under `## Phase 6 Mechanical Closure` and append to `quality/results/phase6-verification.log`:
 ```
@@ -53,31 +61,35 @@ python3 quality_gate.py . > quality/results/quality-gate.log 2>&1  # locate via 
 echo $? >> quality/results/phase6-verification.log
 ```
 
-Read `quality/results/quality-gate.log`. If it reports any FAIL results, fix each failing check before proceeding. The most common FAILs are: (1) missing `quality/patches/BUG-NNN-regression-test.patch` files, (2) non-canonical JSON field names like `bug_id` instead of `id`, (3) missing `confirmed_open` in the TDD summary, (4) writeups without inline fix diffs, (5) missing TDD red/green log files. Do not proceed until `quality_gate.py` exits 0.
+Read `quality/results/quality-gate.log`. If it reports any FAIL results, record each failing check (the fix is executor work — see "Fixes after a failing audit"). The most common FAILs are: (1) missing `quality/patches/BUG-NNN-regression-test.patch` files, (2) non-canonical JSON field names like `bug_id` instead of `id`, (3) missing `confirmed_open` in the TDD summary, (4) writeups without inline fix diffs, (5) missing TDD red/green log files. The verdict is the `RESULT:` line below, not the exit code: exit 0 also covers `GATE PASSED WITH CLEANUP NEEDED`, and exit 1 also covers usage errors (compatibility fork, CC-08).
 
-**MANDATORY gate-verdict witness (v1.5.7 A-13).** This is the same contract stated in `phase_prompts/phase6.md` Step 6.2 — keep the two coherent. Your State P6 "What just happened" chat emit MUST quote the gate's final verdict verbatim. The gate prints exactly these two lines (from quality_gate.py):
+**MANDATORY gate-verdict witness (v1.5.7 A-13).** This is the same contract stated in `phase_prompts/phase6.md` Step 6.2 — keep the two coherent. Your State P6 "What just happened" chat emit MUST quote the gate's final verdict verbatim. The witness is the LAST `RESULT: GATE …` line of the log and the `Total:` line immediately preceding it — not the log's final two lines, because the gate prints a verdict explanation and a `::QPB::` sentinel after the RESULT line (compatibility fork, CC-04). The pair takes exactly one of three shapes (from quality_gate.py):
 
 ```
-Total: N FAIL, M WARN
+Total: 0 FAIL, M WARN
 RESULT: GATE PASSED
-   (or: RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
-    or: RESULT: GATE FAILED — N substantive issue(s) must be fixed)
+
+Total: N CLEANUP, M WARN
+RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
+
+Total: N FAIL (S substantive, R record-keeping), M WARN
+RESULT: GATE FAILED — S substantive issue(s) must be fixed
 ```
 
-Both MUST appear verbatim in the emit (use the State B / State S / State CN gate-witness block in `references/what_just_happened.md`). If `quality/results/quality-gate.log` is empty or lacks these two lines, the gate did not run successfully (never invoked, or output not captured) — re-run it before emitting anything.
+Both lines MUST appear verbatim in the emit (use the State B / State S / State CN gate-witness block in `references/what_just_happened.md`). If `quality/results/quality-gate.log` is empty or has no `RESULT: GATE …` line, the gate did not run successfully (never invoked, or output not captured) — re-run it before emitting anything.
 
 **Three-state verdict — no PASS / PASS WITH CLEANUP NEEDED claim if any substantive FAILs (v1.5.7 089c F15).** The gate distinguishes substantive failure (the work itself wasn't done correctly) from audit record-keeping gaps (the bugs are real and reviewed; the audit trail is incomplete). The end-of-Phase-6 verdict — in PROGRESS.md AND the State P6 chat emit — maps from the quoted `RESULT:` line: `RESULT: GATE PASSED` → PASS; `RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)` → PASS WITH CLEANUP NEEDED (a legitimate, non-blocking outcome — emit State CN); `RESULT: GATE FAILED — N substantive issue(s) must be fixed` → FAIL (list the substantive FAIL count and failing checks; do NOT report PASS, PASS WITH CLEANUP NEEDED, "complete", or "no remaining work"). Fabricating a PASS / PASS WITH CLEANUP NEEDED claim against a substantively-failing or never-run gate is the credibility defect this witness contract closes — it makes non-compliance detectable by any adopter reading the chat output.
 
-**MANDATORY artifact-contract validation (v1.5.7 A-15).** This is the same contract stated in `phase_prompts/phase6.md` — keep the two coherent. After running the gate above (output in `quality/results/quality-gate.log`) and writing the receipted verdict into `quality/INDEX.md`'s `summary.gate_verdict` with `python3 -m bin.quality_playbook finalize-index .` (maps the LAST `RESULT: GATE …` line to `pass`/`pass-with-cleanup`/`fail`, replacing the Phase-5 `"pending"`, and stamps `run_timestamp_end`/`duration_seconds`; never hand-edit the verdict — compatibility fork, CC-03), run `python3 -m bin.validate_phase_artifacts . --phase 6` (resolve `bin/` via the documented install-root fallback; `PYTHONPATH=<install_root>` for an `install_skill.py`-layout adopter) and quote its final `RESULT:` line verbatim in your chat output (it matches `RESULT: VALIDATION PASSED (phase 6)` or `RESULT: VALIDATION FAILED (phase 6 — X FAIL, Y PASS)`). `--phase 6` re-checks `quality/INDEX.md` presence + the required INDEX.md fields (see Phase 5's INDEX.md template) AND requires `summary.gate_verdict` to be one of `pass`/`pass-with-cleanup`/`partial`/`fail` (not still `"pending"`). A non-zero exit means INDEX.md is missing, missing required fields, or still carries `gate_verdict: "pending"`; fix and re-run until exit 0. You MAY NOT report Phase 6 PASS with a failing validator — this per-phase witness is the structural complement to the A-13 gate-verdict witness above.
+**MANDATORY artifact-contract validation (v1.5.7 A-15).** This is the same contract stated in `phase_prompts/phase6.md` — keep the two coherent. After running the gate above (output in `quality/results/quality-gate.log`) and writing the receipted verdict into `quality/INDEX.md`'s `summary.gate_verdict` with `python3 -m bin.quality_playbook finalize-index .` (maps the LAST `RESULT: GATE …` line to `pass`/`pass-with-cleanup`/`fail`, replacing the Phase-5 `"pending"`, and stamps `run_timestamp_end`/`duration_seconds`; never hand-edit the verdict — compatibility fork, CC-03), run `python3 -m bin.validate_phase_artifacts . --phase 6` (resolve `bin/` via the documented install-root fallback; `PYTHONPATH=<install_root>` for an `install_skill.py`-layout adopter) and quote its final `RESULT:` line verbatim in your chat output (it matches `RESULT: VALIDATION PASSED (phase 6)` or `RESULT: VALIDATION FAILED (phase 6 — X FAIL, Y PASS)`). `--phase 6` re-checks `quality/INDEX.md` presence + the required INDEX.md fields (see Phase 5's INDEX.md template) AND requires `summary.gate_verdict` to be one of `pass`/`pass-with-cleanup`/`partial`/`fail` (not still `"pending"`). A non-zero exit means INDEX.md is missing, missing required fields, or still carries `gate_verdict: "pending"`; that is a FAIL to report (the executor fixes and re-runs — see "Fixes after a failing audit"). You MAY NOT report Phase 6 PASS with a failing validator — this per-phase witness is the structural complement to the A-13 gate-verdict witness above.
 
 Append to `quality/results/phase6-verification.log`:
 ```
-[Step 6.2] quality_gate.py: PASS (exit 0) — N checks passed, 0 FAIL, 0 WARN
+[Step 6.2] quality_gate.py: <the RESULT: GATE … line, verbatim> | <the Total: line preceding it, verbatim>
 ```
 
 This step covers verification benchmarks: 14 (sidecar JSON), 17 (test file extension), 18 (use case count), 20 (writeups), 23 (mechanical artifacts), 26 (version stamps), 27 (mechanical directory), 29 (triage-to-BUGS sync), 34 (BUGS.md exists), 38 (individual auditor reports), 39 (BUGS.md heading format), 40 (artifact file existence), 41 (sidecar JSON validation), 42 (script-verified closure), 43 (use case identifiers), 44 (regression-test patches), 45 (writeup inline diffs).
 
-**v1.5.3 Layer-1 invariants also run here.** `quality_gate.py` additionally enforces the Layer-1 invariants summarized in Phase 5 above. In particular, the script re-runs `bin/citation_verifier.extract_excerpt` on every Tier 1/2 citation and rejects any stored `citation_excerpt` that does not byte-equal the freshly-extracted output — this is the post-ingest tampering catch. If any Layer-1 invariant fails here, fix the underlying manifest record (not the gate, not the excerpt) and re-run.
+**v1.5.3 Layer-1 invariants also run here.** `quality_gate.py` additionally enforces the Layer-1 invariants summarized in Phase 5 above. In particular, the script re-runs `bin/citation_verifier.extract_excerpt` on every Tier 1/2 citation and rejects any stored `citation_excerpt` that does not byte-equal the freshly-extracted output — this is the post-ingest tampering catch. If any Layer-1 invariant fails here, record it as FAIL; the executor's fix is to correct the underlying manifest record (not the gate, not the excerpt) and re-run.
 
 ### Step 6.3: Test execution verification
 
@@ -125,7 +137,7 @@ Append each batch result to `quality/results/phase6-verification.log`:
 [Step 6.4F] Continuation mode: SKIP — no SEED_CHECKS.md
 ```
 
-If any batch fails, fix the issue immediately before proceeding to the next batch.
+If any batch fails, record it as FAIL and continue with the next batch; the fix is executor work (see "Fixes after a failing audit").
 
 ### Step 6.5: Metadata Consistency Check
 
@@ -134,14 +146,23 @@ Read `quality/PROGRESS.md` (just the metadata and artifact inventory sections). 
 - The `With docs` field accurately reflects whether `reference_docs/` exists
 - The Terminal Gate Verification section is present and filled in
 
-Then read `quality/COMPLETENESS_REPORT.md` (just the verdict section). Verify no stale pre-reconciliation text remains — if both a `## Verdict` and an `## Updated verdict` (or `## Post-Review Reconciliation`) section exist, **delete the original `## Verdict` section entirely**. The final document must have exactly one `## Verdict` heading.
+Then read `quality/COMPLETENESS_REPORT.md` (just the verdict section). Verify no stale pre-reconciliation text remains — if both a `## Verdict` and an `## Updated verdict` (or `## Post-Review Reconciliation`) section exist, record it as FAIL; the executor's fix is to **delete the original `## Verdict` section entirely**. The final document must have exactly one `## Verdict` heading.
 
 Append to `quality/results/phase6-verification.log`:
 ```
 [Step 6.5] Metadata consistency: PASS — requirement counts match, version stamps consistent
 ```
 
-If any metadata is stale, fix it now.
+If any metadata is stale, record it as FAIL; the executor fixes it (see "Fixes after a failing audit").
+
+### Fixes after a failing audit (executor only — compatibility fork, CC-07)
+
+The steps above verify; they do not repair. Fixes are made by the executor:
+
+- **Mode A:** the parent (never the auditor) fixes each failing item, re-runs `phase_prompts/phase6.md` Part A0 from step 2 (gate → `finalize-index` → AGENTS.md), and spawns a NEW auditor. Never ask an auditor to repair, and never reuse one that has returned a verdict.
+- **Mode B (inline Phase 6):** the Phase 6 subprocess is its own auditor. It fixes inline, re-runs the failing step and the gate, and quotes the new witness. It still never edits `summary.gate_verdict`; the orchestrator writes it after the session (CC-03).
+
+The usual fixes: add missing `quality/patches/BUG-NNN-regression-test.patch` files; rename non-canonical JSON fields (`bug_id` → `id`); add `confirmed_open` to the TDD summary; add inline fix diffs to writeups; add missing TDD red/green logs; correct the manifest record behind a Layer-1 citation failure; delete a superseded `## Verdict` section from `quality/COMPLETENESS_REPORT.md`; correct stale metadata. A Step 6.1 mechanical mismatch means re-extracting: delete the mismatched `*_cases.txt`, re-run the extraction with a fresh shell redirect, re-verify, and update the downstream artifacts that cited the old extraction.
 
 ### Checkpoint: Finalize PROGRESS.md
 

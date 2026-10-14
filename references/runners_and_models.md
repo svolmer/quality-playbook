@@ -127,7 +127,12 @@ see "Council resilience" below) is acceptable BECAUSE the remaining
 two are still cross-family — Claude + GPT, not two GPTs. If the
 degradation fell to a single reviewer, the cross-family check would
 collapse and the audit would be back to one-perspective overreach
-risk. Hence Phase 6's hard-fail at 1-of-3 / 0-of-3.
+risk. That is why a 1-of-3 effective Council downgrades every
+finding to "Needs verification" (`references/spec_audit.md`,
+effective-council rule). There is no shipped Phase 6 hard-fail at
+1-of-3 / 0-of-3: per-reviewer availability detection and the
+hard-fail-with-recovery path are deferred (see "Council
+resilience" below).
 
 ### Why two-of-three is enough
 
@@ -162,8 +167,11 @@ mechanisms exist (in resolution order, most specific first):
 3. **Built-in default** (lowest precedence): the
    `DEFAULT_COUNCIL_MEMBERS` tuple in `bin/council_config.py`.
 
-Each override mechanism accepts a list of three model-identifier
-strings. The strings are opaque to QPB — the runner interprets them.
+The Council contract is three model identifiers. The code is
+more permissive: each override mechanism accepts any non-empty list
+of non-empty strings and does not count them, so supplying three
+distinct identifiers is the operator's (or host's) responsibility.
+The strings are opaque to QPB — the runner interprets them.
 Unknown identifiers (typos, models the runner doesn't support)
 produce a non-fatal startup warning at `--council-roster` parse
 time + at `qpb config set-roster` time; the actual model probe

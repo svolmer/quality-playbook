@@ -459,7 +459,11 @@ class PhasePromptByteEqualityTests(unittest.TestCase):
         # new closing step writes the target AGENTS.md via
         # `bin.quality_playbook agents-md`. Codepoints 25874 -> 26536;
         # hash recomputed (sanctioned change-acknowledgement).
-        "phase5":                (26536, "a5089131237a4b4865861d206699895747c08ac87a06e2635fea13e85d390673"),
+        # Compatibility fork maf.2 (CC-20): the INDEX field list names
+        # the conditional languages_detected / ran_on /
+        # untested_testable_languages keys. Codepoints 26536 -> 27168;
+        # hash recomputed (sanctioned change-acknowledgement).
+        "phase5":                (27168, "567cb9abcdf0137a0ab4d87892e42f4c011d6e1239395505c9b29e788ca8d3ae"),
         # v1.5.7 instruction 071 (A-13 hybrid): phase6.md rewritten
         # for fresh-context sub-agent delegation of Phase 6
         # verification (principled A-17 exception). The old inline
@@ -527,7 +531,13 @@ class PhasePromptByteEqualityTests(unittest.TestCase):
         # finalize-index, agents-md) and the Mode A per-strategy
         # iteration handoff. Codepoints 9151 -> 12579; hash recomputed
         # (sanctioned change-acknowledgement).
-        "phase6":                (12579, "7a838a94a8a614385b6bca7d0a84500b4b8ebb760a0af0bf6da5a5ea94f625ee"),
+        # Compatibility fork maf.2 (CC-04/CC-21): the gate witness is
+        # the last RESULT line plus the preceding Total line, with the
+        # three real Total shapes; end-of-baseline state selection
+        # defers to the classifier and names State CN. Codepoints
+        # 12579 -> 13507; hash recomputed (sanctioned
+        # change-acknowledgement).
+        "phase6":                (13507, "3601f2d890de25ead6e6db5a219c4e17939c3e4491fc3c8be2f641433e783d9f"),
         # v1.5.6 BUG-008: SKILL_FALLBACK_GUIDE grew from 4 to 6
         # documented install paths (added .cursor + .continue), so
         # every prompt that interpolates the guide grows by ~86 bytes.

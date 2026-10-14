@@ -3597,7 +3597,8 @@ def write_live_index_final(
 ) -> None:
     """Re-render quality/INDEX.md at end of Phase 6 with the run's real counts.
 
-    `gate_verdict` is one of pass | fail | partial. Counts come from
+    `gate_verdict` is one of pass | pass-with-cleanup | fail | partial
+    (schemas.md §11; compatibility fork, CC-02). Counts come from
     `archive_lib.build_index_payload()` walking the live quality/ tree;
     `run_timestamp_start` is forced to the run's true start and
     `run_timestamp_end` is captured now so `duration_seconds` is real.
@@ -4341,7 +4342,8 @@ def _log_phase_completion(
         lib.logboth(log_file, lib.log(f"  Phase 6 complete: {gate_result}"))
         gate_passed = _gate_pass(gate_result, quality_dir)
         # v1.5.2 (C13.9): map the finalizer's status into INDEX's
-        # pass|fail|partial schema. 'aborted' has no INDEX equivalent
+        # pass|pass-with-cleanup|fail|partial schema (compatibility
+        # fork, CC-02). 'aborted' has no INDEX equivalent
         # and maps to 'partial' (incomplete-run code). For non-aborted
         # runs the finalizer's pass/fail aligns with the gate verdict
         # we just read; preserve the historical 'warn → partial' fallback
@@ -4362,6 +4364,10 @@ def _log_phase_completion(
             else:
                 verdict = "pass"
         elif finalizer_status == "pass" and "warn" in gate_result.lower():
+            # Compatibility fork (CC-09): legacy branch. The three-state
+            # gate never emits a WARN-only RESULT line, so this is
+            # unreachable for v1.5.7+ logs; `partial` now means an
+            # aborted/incomplete run with no terminal gate verdict.
             verdict = "partial"
         else:
             verdict = "fail"
@@ -4391,12 +4397,17 @@ def _log_phase_completion(
             # v1.5.4 Phase 3.6.5 (B-17): per-project AGENTS.md is now
             # written before the gate and regenerated after the verdict
             # (compatibility fork, CC-15) — see _write_agents_md.
+            # Compatibility fork (CC-10): archive with the verdict
+            # computed above, not a hard-coded "pass". `_gate_pass`
+            # is True for `GATE PASSED WITH CLEANUP NEEDED`, so the
+            # old override stamped "pass" on a pass-with-cleanup run
+            # and the archived INDEX disagreed with the live INDEX.
             try:
                 archive_lib.archive_run(
                     repo_dir,
                     timestamp,
                     status="success",
-                    gate_verdict_override="pass",
+                    gate_verdict_override=verdict,
                 )
             except archive_lib.ArchiveError as exc:
                 lib.logboth(log_file, lib.log(f"  WARN archive_run skipped: {exc}"))

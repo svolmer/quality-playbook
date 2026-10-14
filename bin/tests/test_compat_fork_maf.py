@@ -12,6 +12,18 @@ COMPATIBILITY_FORK.md:
   AGENTS.md is not a source-edit violation, an operator-authored one is.
 - CC-16: iteration handoff is prose-only (SKILL.md / phase6.md /
   AGENTS.md); pinned here by a text check.
+
+v1.6.0-maf.2 adds:
+
+- CC-10: the Mode B Phase 6 archive carries the computed verdict
+  (pass-with-cleanup is not flattened to pass).
+- CC-17: the gate validates recheck status values and that the summary
+  tallies the results; State R prose uses the four schema names.
+- CC-18: qpb_config subcommand list and Council-count prose.
+- CC-19: the gate fails an agent-validation line in the operator
+  confirmation ledger.
+- Prose reconciliations (CC-02/04/06/07/08/09/11/12/13/14/20/21),
+  pinned by text checks.
 """
 
 from __future__ import annotations
@@ -19,6 +31,7 @@ from __future__ import annotations
 import io
 import json
 import re
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -31,6 +44,9 @@ from bin import archive_lib, quality_playbook, run_playbook
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_ROOT = REPO_ROOT / "plugins" / "quality-playbook" / "skills" / "quality-playbook"
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+
+import quality_gate  # noqa: E402
 
 _INDEX_TEMPLATE = (
     "# Run index\n\n"
@@ -283,6 +299,206 @@ class ModeBPhase6OrderingTests(unittest.TestCase):
         self.assertEqual(calls, ["agents:pre-gate"])
 
 
+class ModeBPhase6ArchiveVerdictTests(unittest.TestCase):
+    """CC-10: the Mode B Phase 6 archive is stamped with the verdict the
+    live INDEX got, not a hard-coded "pass"."""
+
+    def _verdicts(self, finalizer_status, gate_log):
+        index_verdicts = []
+
+        def _index(*_a, gate_verdict, **_k):
+            index_verdicts.append(gate_verdict)
+
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d) / "repo"
+            (repo / "quality" / "results").mkdir(parents=True)
+            (repo / "quality" / "results" / "quality-gate.log").write_text(
+                gate_log, encoding="utf-8")
+            with mock.patch.object(run_playbook, "_write_agents_md"), \
+                 mock.patch.object(run_playbook, "_finalize_iteration",
+                                   return_value=finalizer_status), \
+                 mock.patch.object(run_playbook, "write_live_index_final",
+                                   side_effect=_index), \
+                 mock.patch.object(run_playbook, "archive_lib") as fake_archive:
+                run_playbook._log_phase_completion(
+                    repo, "6", repo / "run.log", _Args(), "20261014-100000",
+                )
+        archived = [c.kwargs.get("gate_verdict_override")
+                    for c in fake_archive.archive_run.call_args_list]
+        return index_verdicts, archived
+
+    def test_pass_with_cleanup_is_archived_as_pass_with_cleanup(self):
+        index, archived = self._verdicts(
+            "pass",
+            "RESULT: GATE PASSED WITH CLEANUP NEEDED — 2 audit record-keeping gap(s)\n")
+        self.assertEqual(index, ["pass-with-cleanup"])
+        self.assertEqual(archived, ["pass-with-cleanup"])
+
+    def test_clean_pass_is_archived_as_pass(self):
+        index, archived = self._verdicts("pass", "RESULT: GATE PASSED\n")
+        self.assertEqual(index, ["pass"])
+        self.assertEqual(archived, ["pass"])
+
+    def test_archive_agrees_with_index_when_finalizer_fails(self):
+        # The log read says PASSED but the finalizer's re-run failed: the
+        # live INDEX gets "fail", and the archive must not say "pass".
+        index, archived = self._verdicts("fail", "RESULT: GATE PASSED\n")
+        self.assertEqual(index, ["fail"])
+        self.assertEqual(archived, ["fail"])
+
+    def test_failed_gate_is_not_archived(self):
+        _index, archived = self._verdicts(
+            "fail", "RESULT: GATE FAILED — 1 substantive issue(s) must be fixed\n")
+        self.assertEqual(archived, [])
+
+
+def _run_check(check, *args):
+    quality_gate._reset_counters()
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        check(*args)
+    return quality_gate.FAIL, buf.getvalue()
+
+
+def _recheck_doc(results, summary):
+    return {
+        "schema_version": "1.0",
+        "skill_version": "1.6.0",
+        "date": "2026-10-01",
+        "project": "t",
+        "source_run": {"bugs_md_date": "2026-09-30", "total_bugs": len(results)},
+        "results": results,
+        "summary": summary,
+    }
+
+
+class RecheckSidecarStatusTests(unittest.TestCase):
+    """CC-17: recheck status values and summary tallies are validated."""
+
+    _RESULTS = [
+        {"id": "BUG-001", "status": "FIXED"},
+        {"id": "BUG-002", "status": "PARTIALLY_FIXED"},
+        {"id": "BUG-003", "status": "STILL_OPEN"},
+        {"id": "BUG-004", "status": "STILL_OPEN"},
+        {"id": "BUG-005", "status": "INCONCLUSIVE"},
+    ]
+    _SUMMARY = {"total": 5, "fixed": 1, "partially_fixed": 1,
+                "still_open": 2, "inconclusive": 1}
+
+    def _gate(self, doc):
+        with tempfile.TemporaryDirectory() as d:
+            q = Path(d) / "quality"
+            (q / "results").mkdir(parents=True)
+            (q / "results" / "recheck-results.json").write_text(
+                json.dumps(doc), encoding="utf-8")
+            (q / "results" / "recheck-summary.md").write_text(
+                "# Recheck Results\n", encoding="utf-8")
+            return _run_check(quality_gate.check_recheck_sidecar, q)
+
+    def test_consistent_sidecar_passes(self):
+        fails, out = self._gate(_recheck_doc(self._RESULTS, dict(self._SUMMARY)))
+        self.assertEqual(fails, 0, out)
+        self.assertIn("summary counts match the results tallies", out)
+
+    def test_prose_vocabulary_open_is_rejected(self):
+        results = [dict(r) for r in self._RESULTS]
+        results[2]["status"] = "OPEN"
+        fails, out = self._gate(_recheck_doc(results, dict(self._SUMMARY)))
+        self.assertGreater(fails, 0, out)
+        self.assertIn("BUG-003='OPEN'", out)
+
+    def test_summary_mismatch_is_rejected(self):
+        summary = dict(self._SUMMARY, still_open=1, fixed=2)
+        fails, out = self._gate(_recheck_doc(self._RESULTS, summary))
+        self.assertEqual(fails, 2, out)
+        self.assertIn("summary 'fixed' is 2 but results tally 1", out)
+
+    def test_missing_or_negative_summary_key_is_rejected(self):
+        summary = dict(self._SUMMARY)
+        del summary["partially_fixed"]
+        summary["inconclusive"] = -1
+        fails, out = self._gate(_recheck_doc(self._RESULTS, summary))
+        self.assertEqual(fails, 2, out)
+        self.assertIn("'partially_fixed' is None", out)
+        self.assertIn("'inconclusive' is -1", out)
+
+    def test_boolean_count_is_rejected(self):
+        results = [{"id": "BUG-001", "status": "FIXED"}]
+        summary = {"total": 1, "fixed": True, "partially_fixed": 0,
+                   "still_open": 0, "inconclusive": 0}
+        fails, out = self._gate(_recheck_doc(results, summary))
+        self.assertEqual(fails, 1, out)
+
+    def test_empty_recheck_passes(self):
+        summary = {"total": 0, "fixed": 0, "partially_fixed": 0,
+                   "still_open": 0, "inconclusive": 0}
+        fails, out = self._gate(_recheck_doc([], summary))
+        self.assertEqual(fails, 0, out)
+
+    def test_failure_is_substantive(self):
+        results = [{"id": "BUG-001", "status": "OPEN"}]
+        self._gate(_recheck_doc(results, dict(self._SUMMARY)))
+        self.assertTrue(quality_gate._FAIL_RECORDS)
+        self.assertTrue(all(r[0] == quality_gate.VERDICT_SUBSTANTIVE
+                            for r in quality_gate._FAIL_RECORDS))
+
+
+def _opconf_line(**overrides):
+    record = {
+        "ts": "2026-10-14T10:00:00Z",
+        "move": "confirm",
+        "req_title": "Title",
+        "conditions_of_satisfaction": "CoS",
+        "operator_statement": "Yes, that is right.",
+        "session_id": "2026-10-14-interview",
+    }
+    record.update(overrides)
+    return json.dumps(record)
+
+
+class OperatorConfirmationsAgentValidationTests(unittest.TestCase):
+    """CC-19: an agent-validation line in the human-interview-only ledger
+    is a substantive gate FAIL, even when written around the helper."""
+
+    def _gate(self, lines):
+        with tempfile.TemporaryDirectory() as d:
+            q = Path(d) / "quality"
+            q.mkdir()
+            (q / "operator_confirmations.jsonl").write_text(
+                "".join(line + "\n" for line in lines), encoding="utf-8")
+            return _run_check(
+                quality_gate.check_operator_confirmations_append_only, q)
+
+    def test_operator_line_passes(self):
+        fails, out = self._gate([_opconf_line()])
+        self.assertEqual(fails, 0, out)
+
+    def test_agent_validation_line_fails(self):
+        fails, out = self._gate([
+            _opconf_line(),
+            _opconf_line(source_type="agent-validation"),
+        ])
+        self.assertEqual(fails, 1, out)
+        self.assertIn("line 2 carries source_type='agent-validation'", out)
+        self.assertTrue(all(r[0] == quality_gate.VERDICT_SUBSTANTIVE
+                            for r in quality_gate._FAIL_RECORDS))
+
+    def test_forged_operator_confirmation_still_passes(self):
+        # Known limit: a line forged as operator-confirmation is
+        # indistinguishable here. The host closes it with its own
+        # per-confirmation receipts (host plan, M4).
+        fails, out = self._gate([_opconf_line(source_type="operator-confirmation")])
+        self.assertEqual(fails, 0, out)
+
+    def test_writer_refuses_what_the_gate_fails(self):
+        from bin import run_state_lib
+        record = json.loads(_opconf_line(source_type="agent-validation"))
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(ValueError):
+                run_state_lib.append_confirmation(
+                    Path(d) / "operator_confirmations.jsonl", record)
+
+
 class _FakeCompleted:
     def __init__(self, returncode, stdout="", stderr=""):
         self.returncode = returncode
@@ -344,6 +560,170 @@ class ProseContractTests(unittest.TestCase):
         text = (REPO_ROOT / "SKILL.md").read_text(encoding="utf-8")
         for strategy in ("gap", "unfiltered", "parity", "adversarial"):
             self.assertIn(f"--next-iteration --strategy {strategy}", text)
+
+
+# The three witness shapes the prose documents (CC-04). Placeholders
+# N/M/S/R stand for integers.
+_WITNESS_SHAPES = (
+    ("Total: 0 FAIL, M WARN", "RESULT: GATE PASSED"),
+    ("Total: N CLEANUP, M WARN",
+     "RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)"),
+    ("Total: N FAIL (S substantive, R record-keeping), M WARN",
+     "RESULT: GATE FAILED — S substantive issue(s) must be fixed"),
+)
+
+
+def _shape_regex(shape):
+    pattern = re.escape(shape)
+    for ph in ("N", "M", "S", "R"):
+        pattern = re.sub(rf"(?<![A-Za-z]){ph}(?![A-Za-z])", r"\\d+", pattern)
+    return re.compile(rf"^{pattern}$")
+
+
+class WitnessShapeTests(unittest.TestCase):
+    """CC-04: the documented witness shapes are the gate's real output,
+    and no witness site still claims the old shape or "final two lines"."""
+
+    _SITES = (
+        SKILL_ROOT / "phase_prompts" / "phase6.md",
+        SKILL_ROOT / "phase_prompts" / "phase6_auditor.md",
+        REPO_ROOT / "references" / "phase6_verify_guide.md",
+        REPO_ROOT / "references" / "what_just_happened.md",
+    )
+
+    def test_shapes_match_compute_final_verdict(self):
+        sub = quality_gate.VERDICT_SUBSTANTIVE
+        clean = quality_gate.VERDICT_RECORD_KEEPING
+        cases = (
+            [],
+            [(clean, "a"), (clean, "b")],
+            [(sub, "a"), (clean, "b"), (sub, "c")],
+        )
+        for (total_shape, result_shape), records in zip(_WITNESS_SHAPES, cases):
+            total, result, _ = quality_gate._compute_final_verdict(records, 3)
+            self.assertRegex(total, _shape_regex(total_shape))
+            self.assertRegex(result, _shape_regex(result_shape))
+
+    def test_every_site_lists_the_three_shapes(self):
+        for path in self._SITES:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(site=path.name):
+                for total_shape, result_shape in _WITNESS_SHAPES:
+                    self.assertIn(total_shape, text)
+                    self.assertIn(result_shape, text)
+                self.assertNotIn("Total: N FAIL, M WARN", text)
+                self.assertNotIn("Total: <N> FAIL, <M> WARN", text)
+                self.assertNotIn("final two lines of", text)
+                self.assertNotIn("last two verdict lines", text)
+                self.assertIn("immediately preceding", text)
+
+
+class MafTwoProseContractTests(unittest.TestCase):
+    """Pin the prose reconciliations of v1.6.0-maf.2."""
+
+    @staticmethod
+    def _text(path):
+        return path.read_text(encoding="utf-8")
+
+    def test_state_r_reports_all_four_recheck_counts(self):  # CC-17
+        wjh = self._text(REPO_ROOT / "references" / "what_just_happened.md")
+        state_r = wjh.split("### State R", 1)[1].split("\n## ", 1)[0]
+        for name in ("FIXED", "PARTIALLY_FIXED", "STILL_OPEN", "INCONCLUSIVE"):
+            self.assertIn(name, state_r)
+        for key in quality_gate._RECHECK_STATUS_TO_SUMMARY_KEY.values():
+            self.assertIn(f"`{key}`", state_r)
+        self.assertNotIn("still OPEN", state_r)
+
+    def test_qpb_config_subcommands_match_cli(self):  # CC-18
+        for path in (REPO_ROOT / "SKILL.md", REPO_ROOT / "AGENTS.md"):
+            text = self._text(path)
+            with self.subTest(doc=path.name):
+                self.assertIn("qpb_config show|set-runner|set-roster|unset", text)
+                self.assertNotIn("qpb_config show|set|unset", text)
+
+    def test_runners_doc_has_no_shipped_hard_fail_claim(self):  # CC-18
+        text = self._text(REPO_ROOT / "references" / "runners_and_models.md")
+        self.assertNotIn("Hence Phase 6's hard-fail", text)
+        self.assertIn("any non-empty list", text)
+
+    def test_verify_guide_heading_and_fix_scoping(self):  # CC-06, CC-07
+        text = self._text(REPO_ROOT / "references" / "phase6_verify_guide.md")
+        self.assertNotIn("^## BUG-", text)
+        self.assertIn("^### BUG-", text)
+        self.assertIn("cross-validation row 6", text)
+        self.assertIn("### Fixes after a failing audit", text)
+        for retired in (
+            "fix each failing check before proceeding",
+            "fix the issue immediately",
+            "fix it now",
+            "Do not proceed until `quality_gate.py` exits 0",
+        ):
+            self.assertNotIn(retired, text)
+
+    def test_partial_definition(self):  # CC-09
+        text = self._text(REPO_ROOT / "SKILL.md")
+        self.assertNotIn("WARN-only runs", text)
+        self.assertIn("no terminal gate verdict", text)
+
+    def test_schemas_index_section(self):  # CC-11, CC-12
+        text = self._text(REPO_ROOT / "schemas.md")
+        section = text.split("## 11. Per-Run `INDEX.md` Fields", 1)[1]
+        section = section.split("## 11.1.", 1)[0]
+        self.assertIn("finalize-index", section)
+        self.assertIn("`phase_prompts/phase5.md`", section)
+        self.assertNotIn("defined in `SKILL.md`", section)
+        self.assertIn("Completion contract", section)
+        self.assertIn("RESULT: VALIDATION PASSED (phase 6)", section)
+
+    def test_run_state_schema(self):  # CC-13, CC-14
+        text = self._text(REPO_ROOT / "references" / "run_state_schema.md")
+        self.assertNotIn("| yes | `\"1.5.6\"` |", text)
+        resume = text.split("## Resume semantics", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("resolve_run_state_path", resume)
+        row2 = next(
+            line for line in text.splitlines() if line.startswith("| 2 |")
+        )
+        for name in ("requirements_manifest.json", "use_cases_manifest.json",
+                     "--phase 2"):
+            self.assertIn(name, row2)
+
+    def test_phase5_lists_conditional_language_keys(self):  # CC-20
+        text = self._text(SKILL_ROOT / "phase_prompts" / "phase5.md")
+        for key in ("summary.languages_detected", "summary.ran_on",
+                    "summary.untested_testable_languages"):
+            self.assertIn(key, text)
+
+    def test_state_counts_match_classifier(self):  # CC-21
+        wjh = self._text(REPO_ROOT / "references" / "what_just_happened.md")
+        rules = re.findall(r"^\|\s*(\d+)\s*\|", wjh, re.MULTILINE)
+        self.assertEqual(rules, [str(i) for i in range(1, 11)])
+        states = re.findall(r"^### State (\w+)", wjh, re.MULTILINE)
+        self.assertEqual(len(set(states)), 14)
+        self.assertIn("CN", states)
+        self.assertIn("the fourteen defined here", wjh)
+        skill = self._text(REPO_ROOT / "SKILL.md")
+        self.assertIn("fourteen run states", skill)
+        self.assertIn("10-rule", skill)
+        self.assertIn("/ S / CN / B /", skill)
+        self.assertNotIn("9-rule", skill)
+        self.assertNotIn("thirteen", skill)
+        phase6 = self._text(SKILL_ROOT / "phase_prompts" / "phase6.md")
+        self.assertIn("State CN (Rule 7)", phase6)
+
+    def test_shipped_prose_never_cites_schemas_md(self):
+        # FINDING-50 (test_schemas_audit_191) checks this only against a
+        # staged _bundle/; pin the fork-edited shipped files directly.
+        shipped = [REPO_ROOT / "SKILL.md"]
+        shipped += sorted((REPO_ROOT / "references").glob("*.md"))
+        shipped += sorted((SKILL_ROOT / "phase_prompts").glob("*.md"))
+        for path in shipped:
+            with self.subTest(doc=path.name):
+                self.assertNotIn("schemas.md", self._text(path))
+
+    def test_gate_docstring_overloaded_exit_code(self):  # CC-08
+        doc = quality_gate.__doc__ or ""
+        self.assertIn("Exit 1 is therefore overloaded", doc)
+        self.assertIn("``RESULT: GATE …`` line", doc)
 
 
 if __name__ == "__main__":

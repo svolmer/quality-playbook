@@ -114,7 +114,7 @@ class Phase6GateWitnessContractTests(unittest.TestCase):
         )
         # The gate's literal verdict lines must be named so the agent
         # knows exactly what to quote.
-        for needle in ("Total: N FAIL, M WARN", "RESULT: GATE PASSED"):
+        for needle in ("Total: 0 FAIL, M WARN", "RESULT: GATE PASSED"):
             self.assertIn(needle, phase6)
             self.assertIn(needle, guide)
 
@@ -150,7 +150,7 @@ class Phase6GateWitnessContractTests(unittest.TestCase):
         )
         self.assertIn(_TEMPLATE_WITNESS, state_b,
                       "State B template missing the gate-witness block")
-        self.assertIn("Total: N FAIL, M WARN", state_b)
+        self.assertIn("Total: 0 FAIL, M WARN", state_b)
         self.assertIn("RESULT: GATE PASSED", state_b)
         # 089c F15 three-state (replaces the retired `N=0` /
         # `You may\nNOT claim PASS` pins — the no-PASS rule now lives
@@ -197,7 +197,7 @@ class Phase6GateWitnessContractTests(unittest.TestCase):
         )
         self.assertIn(_TEMPLATE_WITNESS, state_s,
                       "State S template missing the gate-witness block")
-        self.assertIn("Total: N FAIL, M WARN", state_s)
+        self.assertIn("Total: 0 FAIL, M WARN", state_s)
         self.assertIn("RESULT: GATE PASSED", state_s)
         self.assertIn("pass-process / fail-recall signal", state_s)
 

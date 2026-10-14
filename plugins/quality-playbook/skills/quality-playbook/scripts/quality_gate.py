@@ -18,7 +18,16 @@ Exit codes:
         record-keeping gaps remain; the review completed and its
         findings stand — see the v1.5.7 089c F15 taxonomy block below)
     1 — GATE FAILED (one or more substantive issues — the work itself
-        wasn't done correctly)
+        wasn't done correctly); ALSO a usage error (no resolvable repo
+        directory) and a ``--check-skill-references`` FAIL
+    2 — usage error: ``--language`` names an unknown / non-testable
+        language
+
+    Exit 1 is therefore overloaded (compatibility fork, CC-08). A
+    consumer deciding the completion verdict MUST read the final
+    ``RESULT: GATE …`` line (and the ``Total:`` line immediately
+    preceding it), not the exit code alone; a missing RESULT line means
+    the gate did not run to a verdict.
 
 Runs on Python 3.8+ with only the standard library.
 """
@@ -3820,7 +3829,8 @@ def check_recheck_sidecar(q):
     pass_("recheck-results.json exists")
     data = load_json(rj)
 
-    # SKILL.md recheck template uses 'results' as the array key, not 'bugs'.
+    # The recheck template (references/recheck_mode.md) uses 'results' as
+    # the array key, not 'bugs'.
     for key in ["schema_version", "skill_version", "date", "project",
                 "results", "summary"]:
         if has_key(data, key):
@@ -3846,10 +3856,77 @@ def check_recheck_sidecar(q):
         else:
             pass_(f"recheck-results.json date '{rdate}' is valid")
 
+    _check_recheck_statuses_and_summary(data)
+
     if rs.is_file():
         pass_("recheck-summary.md exists")
     else:
         fail("recheck-summary.md missing (required companion to recheck-results.json)")
+
+
+# Compatibility fork (CC-17): the four recheck verdicts and the summary
+# key each one is tallied under (references/recheck_mode.md, Step 2/3).
+_RECHECK_STATUS_TO_SUMMARY_KEY = {
+    "FIXED": "fixed",
+    "PARTIALLY_FIXED": "partially_fixed",
+    "STILL_OPEN": "still_open",
+    "INCONCLUSIVE": "inconclusive",
+}
+
+
+def _check_recheck_statuses_and_summary(data):
+    """Compatibility fork (CC-17): validate recheck verdict values and
+    that ``summary`` tallies ``results``.
+
+    Pre-fork the gate checked only that ``results`` and ``summary``
+    existed, so a sidecar using the State R prose vocabulary ("OPEN")
+    or a summary that disagreed with its own results passed. Every
+    ``results[].status`` must be one of the four schema values; the
+    four summary counts must be non-negative integers equal to the
+    per-status tallies of ``results``.
+    """
+    results = data.get("results") if isinstance(data, dict) else None
+    summary = data.get("summary") if isinstance(data, dict) else None
+    if not isinstance(results, list):
+        if results is not None:
+            fail("recheck 'results' is not a JSON array")
+        return
+
+    allowed = ", ".join(_RECHECK_STATUS_TO_SUMMARY_KEY)
+    tallies = {key: 0 for key in _RECHECK_STATUS_TO_SUMMARY_KEY.values()}
+    bad = []
+    for i, entry in enumerate(results):
+        status = entry.get("status") if isinstance(entry, dict) else None
+        key = _RECHECK_STATUS_TO_SUMMARY_KEY.get(status) if isinstance(status, str) else None
+        if key is None:
+            ident = entry.get("id") if isinstance(entry, dict) else None
+            bad.append(f"{ident or f'results[{i}]'}={status!r}")
+        else:
+            tallies[key] += 1
+    if bad:
+        fail(f"recheck results carry non-canonical status value(s) "
+             f"{', '.join(bad[:5])}{'...' if len(bad) > 5 else ''} "
+             f"(must be one of {allowed})")
+    else:
+        pass_(f"all {len(results)} recheck result status value(s) are canonical")
+
+    if not isinstance(summary, dict):
+        if summary is not None:
+            fail("recheck 'summary' is not a JSON object")
+        return
+    counts_ok = True
+    for key, tally in tallies.items():
+        value = summary.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            fail(f"recheck summary '{key}' is {value!r}, expected a "
+                 "non-negative integer")
+            counts_ok = False
+        elif not bad and value != tally:
+            fail(f"recheck summary '{key}' is {value} but results tally "
+                 f"{tally}")
+            counts_ok = False
+    if counts_ok and not bad:
+        pass_("recheck summary counts match the results tallies")
 
 
 def check_heartbeat_sidecar(q):
@@ -8226,6 +8303,18 @@ def check_operator_confirmations_append_only(q):
             fail("operator_confirmations.jsonl",
                  f"line {lineno} move={move!r} is not one of "
                  f"{_OPCONF_MOVES} (schemas.md §9.5.1)")
+            shape_ok = False
+        # Compatibility fork (CC-19): Feature H guard 2 is enforced at the
+        # writer (run_state_lib.append_confirmation refuses it), but a
+        # line written around the helper was invisible to the gate. The
+        # ledger is human-interview-only; an agent-validation line is a
+        # persona laundering into the highest-trust class.
+        if obj.get("source_type") == "agent-validation":
+            fail("operator_confirmations.jsonl",
+                 f"line {lineno} carries source_type='agent-validation' — "
+                 "this ledger is human-interview-only; a persona may never "
+                 "append here (Feature H guard 2 write-restriction, "
+                 "schemas.md §9.5 / §3.7)")
             shape_ok = False
 
     # Mechanism 1: manifest names confirmed REQs but the log is empty.
