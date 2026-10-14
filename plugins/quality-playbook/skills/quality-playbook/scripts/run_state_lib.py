@@ -994,8 +994,13 @@ def validate_phase_artifacts(quality_dir: Path, phase: int) -> tuple[bool, str]:
     # quality/PROGRESS.md marks Phase 6 complete with a Terminal
     # Gate Verification section. The pre-cluster-B Phase 6 check
     # (BUGS.md + INDEX.md) was the v1.5.5 design's mapping —
-    # BUGS.md is a Phase 3 output and INDEX.md was never adopted
-    # in the shipped contract.
+    # BUGS.md is a Phase 3 output.
+    # Compatibility fork (CC-05): INDEX.md WAS adopted afterwards
+    # (v1.5.7 A-15, schemas.md §11), and Phase 6 is only complete once
+    # its gate_verdict is final — a "pending" verdict means Phase 6
+    # never finalized, so resume must re-run it rather than
+    # synthesize phase_end. Mirrors validate_phase_artifacts.py's
+    # _INDEX_VALID_VERDICTS.
     gate_log = quality_dir / "results" / "quality-gate.log"
     if not gate_log.is_file():
         return (False, f"missing artifact: {gate_log}")
@@ -1011,7 +1016,35 @@ def validate_phase_artifacts(quality_dir: Path, phase: int) -> tuple[bool, str]:
             f"{progress} does not contain a 'Terminal Gate Verification' "
             f"section (required at Phase 6 completion)",
         )
+    index = quality_dir / "INDEX.md"
+    if not index.is_file():
+        return (False, f"missing artifact: {index}")
+    match = re.search(
+        r"```json\n(.*?)\n```",
+        index.read_text(encoding="utf-8", errors="ignore"),
+        re.DOTALL,
+    )
+    try:
+        payload = json.loads(match.group(1)) if match else None
+    except json.JSONDecodeError:
+        payload = None
+    if not isinstance(payload, dict):
+        return (False, f"{index} has no parseable fenced JSON object")
+    summary = payload.get("summary")
+    verdict = summary.get("gate_verdict") if isinstance(summary, dict) else None
+    if verdict not in PHASE6_FINAL_GATE_VERDICTS:
+        return (
+            False,
+            f"{index} summary.gate_verdict={verdict!r} is not final "
+            f"(required one of {list(PHASE6_FINAL_GATE_VERDICTS)} at "
+            f"Phase 6 completion)",
+        )
     return (True, "")
+
+
+# Compatibility fork (CC-05): the final INDEX.md gate_verdict values
+# (schemas.md §11). "pending" (written at Phase 5) is deliberately absent.
+PHASE6_FINAL_GATE_VERDICTS = ("pass", "pass-with-cleanup", "partial", "fail")
 
 
 def validate_no_source_edits(

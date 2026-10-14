@@ -454,7 +454,12 @@ class PhasePromptByteEqualityTests(unittest.TestCase):
         # remediation/skip path). Codepoints 21004 → 25914;
         # hash recomputed.
         # v1.5.7 191 FINDING-50: schemas.md prose citations stripped/rewritten.
-        "phase5":                (25874, "73ec995d76e142939f03ee70fe226cf5ff7629ac468e27ba3490928409ca2056"),
+        # Compatibility fork (svolmer, CC-03/CC-15): phase5.md INDEX
+        # gate_verdict enum names pass-with-cleanup and finalize-index;
+        # new closing step writes the target AGENTS.md via
+        # `bin.quality_playbook agents-md`. Codepoints 25874 -> 26536;
+        # hash recomputed (sanctioned change-acknowledgement).
+        "phase5":                (26536, "a5089131237a4b4865861d206699895747c08ac87a06e2635fea13e85d390673"),
         # v1.5.7 instruction 071 (A-13 hybrid): phase6.md rewritten
         # for fresh-context sub-agent delegation of Phase 6
         # verification (principled A-17 exception). The old inline
@@ -516,7 +521,13 @@ class PhasePromptByteEqualityTests(unittest.TestCase):
         # baseline update IS the sanctioned change-acknowledgement
         # signal.
         # v1.5.7 191 FINDING-50: schemas.md prose citations stripped/rewritten.
-        "phase6":                ( 9151, "b64921d1ea22c3c777e7cc244fe9795917c33b43a44ebea58f2ea166c24e2017"),
+        # Compatibility fork (svolmer, CC-03/CC-15/CC-16): phase6.md
+        # gained the Mode B "do not edit gate_verdict" sentence, Part A0
+        # (parent pre-audit finalization: agents-md, receipted gate,
+        # finalize-index, agents-md) and the Mode A per-strategy
+        # iteration handoff. Codepoints 9151 -> 12579; hash recomputed
+        # (sanctioned change-acknowledgement).
+        "phase6":                (12579, "7a838a94a8a614385b6bca7d0a84500b4b8ebb760a0af0bf6da5a5ea94f625ee"),
         # v1.5.6 BUG-008: SKILL_FALLBACK_GUIDE grew from 4 to 6
         # documented install paths (added .cursor + .continue), so
         # every prompt that interpolates the guide grows by ~86 bytes.

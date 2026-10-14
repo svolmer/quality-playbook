@@ -106,15 +106,31 @@ Resolve `bin/` via the documented install-root fallback —
 `PYTHONPATH=<install_root> python3 -m bin.validate_phase_artifacts . --phase 6`
 for an `install_skill.py`-layout adopter. `--phase 6` re-checks
 `quality/INDEX.md` presence + the required INDEX.md fields AND
-requires `summary.gate_verdict` to be one of `pass` / `partial` / `fail`
-(it is `"pending"` after Phase 5 — Phase 6 MUST have updated it to the real
-verdict). The validator emits a self-authenticating final `RESULT:` line:
+requires `summary.gate_verdict` to be one of `pass` / `pass-with-cleanup` /
+`partial` / `fail` (it is `"pending"` after Phase 5 — the parent's
+pre-audit finalization, `python3 -m bin.quality_playbook finalize-index .`,
+MUST have updated it to the receipted verdict). The validator emits a
+self-authenticating final `RESULT:` line:
 
     RESULT: VALIDATION PASSED (phase 6)
     or RESULT: VALIDATION FAILED (phase 6 — X FAIL, Y PASS)
 
 QUOTE this final `RESULT:` line verbatim too (VALIDATION FAILED means the
 artifacts violate the contract — report it; do NOT fix it).
+
+**INDEX verdict cross-check (compatibility fork, CC-03).** Read
+`summary.gate_verdict` from the fenced JSON block in `quality/INDEX.md`
+and compare it with the mapping of the gate `RESULT:` line YOU witnessed
+in Step 2: `RESULT: GATE PASSED` → `pass`;
+`RESULT: GATE PASSED WITH CLEANUP NEEDED …` → `pass-with-cleanup`;
+`RESULT: GATE FAILED …` → `fail`. Quote both values:
+
+    INDEX gate_verdict: <value>   (expected from witnessed RESULT: <value>)
+
+A mismatch is an execution error: your verdict is `FAIL`, whatever the
+gate said, and the audit notes must name both values. Do NOT edit
+INDEX.md to reconcile them — the parent re-finalizes and spawns a new
+auditor.
 
 ## Step 4 — Return the structured verdict
 
@@ -126,6 +142,8 @@ Your return to the parent MUST contain exactly:
 
     VALIDATOR WITNESS (verbatim):
     RESULT: VALIDATION [PASSED|FAILED] (phase 6 — ...)
+
+    INDEX gate_verdict: <value>   (expected from witnessed RESULT: <value>)
 
     AUDITOR VERDICT: [PASS | PASS WITH CLEANUP NEEDED | FAIL]
 
@@ -141,6 +159,7 @@ GATE PASSED WITH CLEANUP NEEDED` (only record-keeping gaps, zero
 substantive FAILs) AND the validator shows `RESULT: VALIDATION PASSED
 (phase 6)` — the review completed and the bug findings stand; only the
 audit trail has gaps (non-blocking). If the gate shows `RESULT: GATE
-FAILED` (any substantive issue) OR the validator shows `FAILED`, your
+FAILED` (any substantive issue) OR the validator shows `FAILED` OR the
+INDEX `gate_verdict` does not match the witnessed `RESULT:` line, your
 verdict is `FAIL`. There is no value in helping the parent look good —
 that is precisely the bug this auditor role fixes.

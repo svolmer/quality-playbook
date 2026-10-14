@@ -12,6 +12,14 @@ Subcommands:
         a failed or partial run before the next run's overwrite; the
         orchestrator auto-invokes the success path at end of Phase 6.
 
+    finalize-index [<repo>]
+        Map the last `RESULT: GATE ...` line of quality/results/quality-gate.log
+        into quality/INDEX.md summary.gate_verdict (compatibility fork, CC-03).
+
+    agents-md [<repo>]
+        Write or regenerate the QPB-managed AGENTS.md at the repo root;
+        an operator-authored AGENTS.md is preserved (compatibility fork, CC-15).
+
 Design: this shim exists so the install-blocks in README.md, AGENTS.md,
 and agents/quality-playbook.agent.md can document a single
 `quality_playbook <subcommand>` command line rather than dispatching
@@ -66,13 +74,29 @@ _SUBCOMMANDS = {
             "member JSON responses. See `semantic-check --help`."
         ),
     },
+    "finalize-index": {
+        "module": archive_lib,
+        "main": archive_lib.finalize_index_main,
+        "help": (
+            "Map the Phase 6 gate RESULT line into quality/INDEX.md "
+            "summary.gate_verdict. See `finalize-index --help`."
+        ),
+    },
+    "agents-md": {
+        "module": archive_lib,
+        "main": archive_lib.agents_md_main,
+        "help": (
+            "Write/regenerate the QPB-managed AGENTS.md at the repo "
+            "root. See `agents-md --help`."
+        ),
+    },
 }
 
 
 def _usage() -> str:
     lines = ["quality_playbook <subcommand> [options]", "", "Subcommands:"]
     for name, spec in _SUBCOMMANDS.items():
-        lines.append(f"  {name:<10} {spec['help']}")
+        lines.append(f"  {name:<15} {spec['help']}")
     lines.append("")
     lines.append("Run `quality_playbook <subcommand> --help` for per-subcommand options.")
     return "\n".join(lines)
@@ -120,7 +144,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("", file=sys.stderr)
         print(_usage(), file=sys.stderr)
         return 1
-    return spec["module"].main(rest)
+    entry = spec.get("main") or spec["module"].main
+    return entry(rest)
 
 
 if __name__ == "__main__":
