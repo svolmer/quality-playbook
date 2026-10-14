@@ -440,13 +440,20 @@ and preserves validator/provenance contracts on both selected target types.
 **Deliver:** MAF generation with original requirements/tests/review protocols;
 manifest/render contracts, RUN_CONTRACT separation, traceability, coverage/gaps,
 requirements interview, append-only confirmations, and isolated persona
-remediation. Reuse deterministic grounding/merge/renumber helpers.
+remediation. Reuse deterministic grounding/merge/renumber helpers. The host
+records a receipt for each operator confirmation it actually collected
+(confirmation ID, REQ, operator identity, time, answer digest) outside the
+target's `quality/` tree, because the ledger alone cannot prove a human wrote
+a line: a forged `operator-confirmation` line passes both
+`append_confirmation` and the gate (fork CC-19 covers only `agent-validation`).
 
 **Verify:** golden schema/contract fixtures and mutation failures; unchanged
 record/citation attachment except explicitly permitted changes; human answers
 round-trip into citable transcripts; confirmations survive re-derivation.
 Test persona source/secret/network denial, poisoning, candidate-only ungrounded
 adds, conflict handling, and `agent-validation` versus human provenance.
+Cross-check every `operator-confirmation` ledger line against a host receipt:
+a line with no receipt, or whose answer digest differs, fails the run.
 
 **Stop/go:** Phase 2's required artifact set and validator pass; no manufactured
 human confirmation or source-fed persona. Static golden files alone do not
