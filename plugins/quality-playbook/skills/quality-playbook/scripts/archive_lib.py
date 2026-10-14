@@ -881,6 +881,437 @@ def archive_run(
 
 
 # ---------------------------------------------------------------------------
+# Compatibility fork (CC-03): mechanical Phase 6 gate-verdict finalization
+# ---------------------------------------------------------------------------
+# Upstream v1.6.0 left the Mode A INDEX update to the agent ("Phase 6 MUST
+# have updated it") without saying who maps the verdict or how. The
+# fork makes the mapping mechanical: the parent runs the gate, then this
+# helper maps the LAST `RESULT: GATE …` line of the receipted gate log
+# through `_GATE_RESULT_TO_VERDICT` into `summary.gate_verdict`. The
+# fresh-context auditor re-derives the same mapping from the RESULT line
+# it witnesses and FAILs on any mismatch.
+
+GATE_LOG_RELPATH = Path("quality") / "results" / "quality-gate.log"
+_INDEX_JSON_BLOCK = re.compile(r"(```json\n)(.*?)(\n```)", re.DOTALL)
+
+
+def read_last_gate_result(gate_log: Path) -> Optional[str]:
+    """Return the verdict token of the LAST `RESULT: GATE …` line in
+    ``gate_log`` (``"PASSED"``, ``"PASSED WITH CLEANUP NEEDED"`` or
+    ``"FAILED"``), or ``None`` when the log is absent or carries no
+    RESULT line. The last line wins so a log that accumulated more than
+    one gate run reports the most recent verdict."""
+    matches = _GATE_RESULT_PATTERN.findall(_read_text(Path(gate_log)))
+    return matches[-1].upper() if matches else None
+
+
+def gate_verdict_from_result(token: str) -> str:
+    """Map a gate RESULT token to the schemas.md §11 INDEX enum value."""
+    try:
+        return _GATE_RESULT_TO_VERDICT[token.upper()]
+    except KeyError:
+        raise ArchiveError(f"unrecognised gate RESULT token {token!r}") from None
+
+
+def finalize_index_gate_verdict(
+    repo_dir: Path,
+    *,
+    now: Optional[datetime] = None,
+) -> Dict[str, object]:
+    """Write the Phase 6 gate verdict into the live ``quality/INDEX.md``.
+
+    Reads the last ``RESULT: GATE …`` line of
+    ``quality/results/quality-gate.log``, maps it to the INDEX enum,
+    and rewrites the fenced JSON block in place with
+    ``summary.gate_verdict``, ``run_timestamp_end`` and
+    ``duration_seconds`` updated. Text outside the JSON block is left
+    untouched. Raises :class:`ArchiveError` (and writes nothing) when
+    the gate log has no RESULT line or INDEX.md has no parseable JSON
+    object — the verdict is never guessed.
+
+    Returns ``{"result": <token>, "gate_verdict": <enum>,
+    "run_timestamp_end": <ts>, "duration_seconds": <int>}``.
+    """
+    repo_dir = Path(repo_dir)
+    gate_log = repo_dir / GATE_LOG_RELPATH
+    token = read_last_gate_result(gate_log)
+    if token is None:
+        raise ArchiveError(
+            f"{gate_log}: no `RESULT: GATE …` line — run the gate "
+            "(`python3 quality_gate.py . > quality/results/quality-gate.log 2>&1`) "
+            "before finalizing INDEX.md"
+        )
+    verdict = gate_verdict_from_result(token)
+    index_path = repo_dir / "quality" / "INDEX.md"
+    text = _read_text(index_path)
+    match = _INDEX_JSON_BLOCK.search(text)
+    if not match:
+        raise ArchiveError(f"{index_path}: missing or has no fenced ```json block")
+    try:
+        payload = json.loads(match.group(2))
+    except json.JSONDecodeError as exc:
+        raise ArchiveError(f"{index_path}: fenced JSON invalid ({exc})") from None
+    if not isinstance(payload, dict):
+        raise ArchiveError(f"{index_path}: fenced JSON block is not an object")
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        summary = {}
+        payload["summary"] = summary
+    summary["gate_verdict"] = verdict
+    end = utc_extended_timestamp(now)
+    payload["run_timestamp_end"] = end
+    duration = _duration_seconds(str(payload.get("run_timestamp_start", "")), end)
+    payload["duration_seconds"] = duration
+    body = json.dumps(payload, indent=2, sort_keys=False)
+    new_text = text[: match.start(2)] + body + text[match.end(2):]
+    index_path.write_text(new_text, encoding="utf-8")
+    return {
+        "result": token,
+        "gate_verdict": verdict,
+        "run_timestamp_end": end,
+        "duration_seconds": duration,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Per-project AGENTS.md (v1.5.4 Phase 3.6.5 B-17; moved here by the
+# compatibility fork, CC-15)
+# ---------------------------------------------------------------------------
+# The generator previously lived in bin/run_playbook.py, which is not in
+# the install bundle, so Mode A had no sanctioned way to produce the
+# AGENTS.md the gate requires. It now lives in this bundled module;
+# run_playbook keeps its historical private names as aliases.
+#
+# v1.5.4 Phase 3.7 Fix 3 (Round 8 HIGH): the sentinel constant carries
+# the literal version (so an operator inspecting the file knows which
+# QPB version produced it), but detection uses a PREFIX match. v1.5.5+
+# will correctly recognise v1.5.4-generated AGENTS.md as QPB-managed
+# and regenerate them rather than preserving them as if operator-
+# authored. The prefix is the load-bearing part; the version after
+# `QPB ` is informational only.
+QPB_AGENTS_SENTINEL_PREFIX = "<!-- generated by QPB"
+QPB_AGENTS_SENTINEL = f"{QPB_AGENTS_SENTINEL_PREFIX} v1.5.4 -->"
+
+
+def _load_role_map_module():
+    try:
+        from . import role_map as _role_map  # noqa: WPS433
+    except ImportError:
+        import importlib.util as _ilu
+        _rm_path = Path(__file__).resolve().parent / "role_map.py"
+        _rm_spec = _ilu.spec_from_file_location(
+            "_qpb_role_map_via_archive_lib", _rm_path,
+        )
+        if _rm_spec is None or _rm_spec.loader is None:
+            raise ImportError(f"archive_lib: cannot resolve role_map at {_rm_path}")
+        _role_map = _ilu.module_from_spec(_rm_spec)
+        sys.modules[_rm_spec.name] = _role_map
+        _rm_spec.loader.exec_module(_role_map)
+    return _role_map
+
+
+def is_qpb_managed_agents_md(path: Path) -> bool:
+    """True when ``path`` is a file carrying the QPB sentinel prefix on
+    one of its first 5 non-empty lines (i.e. QPB generated it)."""
+    path = Path(path)
+    if not path.is_file():
+        return False
+    head_lines = [ln for ln in _read_text(path).splitlines() if ln.strip()][:5]
+    return any(QPB_AGENTS_SENTINEL_PREFIX in ln for ln in head_lines)
+
+
+def safe_write_agents_md(target_path: Path, content: str) -> str:
+    """Write AGENTS.md at ``target_path`` while respecting
+    operator-authored content.
+
+    Returns one of:
+      - ``"wrote"``        — no prior file; created fresh.
+      - ``"regenerated"``  — existing file carried the
+                             ``QPB_AGENTS_SENTINEL_PREFIX`` on one of
+                             the first 5 non-empty lines (any QPB
+                             version); refreshed in place with the
+                             current version's full sentinel.
+      - ``"preserved"``    — existing file lacked the QPB prefix
+                             (operator-authored); left untouched and
+                             a WARN line was emitted.
+
+    v1.5.4 Phase 3.6.5 (B-17, H5 fix): the sentinel-on-first-lines
+    discipline lets operators author their own AGENTS.md without
+    losing it to a re-run. To opt back into QPB-managed
+    regeneration, move the operator file aside (e.g. to
+    ``AGENTS.qpb-preserved.md``) and re-run.
+
+    v1.5.4 Phase 3.7 Fix 3 (Round 8 HIGH): detection matches on the
+    ``QPB_AGENTS_SENTINEL_PREFIX`` rather than the literal v1.5.4
+    string, so cross-version regeneration works (v1.5.5 detecting
+    v1.5.4-generated files as QPB-managed; v1.5.4 detecting a
+    hypothetical v1.5.5-generated file the same way).
+    """
+    target_path = Path(target_path)
+    if target_path.is_file():
+        if not is_qpb_managed_agents_md(target_path):
+            print(
+                f"WARN: AGENTS.md exists at {target_path} and appears "
+                "operator-authored (no QPB sentinel in the first 5 "
+                "non-empty lines). Preserving existing file. To opt "
+                "into QPB-managed regeneration, move your AGENTS.md "
+                "aside (e.g., AGENTS.qpb-preserved.md) and re-run.",
+                file=sys.stderr,
+            )
+            return "preserved"
+        outcome = "regenerated"
+    else:
+        outcome = "wrote"
+    body = content if content.endswith("\n") else content + "\n"
+    if not body.lstrip().startswith(QPB_AGENTS_SENTINEL_PREFIX):
+        body = f"{QPB_AGENTS_SENTINEL}\n{body}"
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(body, encoding="utf-8")
+    return outcome
+
+
+def extract_exploration_narrative(quality_dir: Path) -> str:
+    """Pull the architecture / domain narrative excerpt from
+    EXPLORATION.md. v1.5.4 Phase 3.6.5 (M9 fix): the AGENTS.md
+    "What this is" section needs more than the role-map percentages
+    — operators want the architectural framing the LLM produced.
+
+    Heuristic: find the first heading-section whose title contains
+    'architecture', 'domain', or 'stack' (case-insensitive); return
+    up to 800 characters of body text. Fall back to the first
+    non-empty paragraph if no such heading exists. Returns "" when
+    EXPLORATION.md is absent.
+    """
+    path = quality_dir / "EXPLORATION.md"
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    import re as _re
+    pat = _re.compile(
+        r"^#+\s+([^\n]*(?:architect|domain|stack)[^\n]*)\n(.*?)(?=^#+\s|\Z)",
+        _re.IGNORECASE | _re.MULTILINE | _re.DOTALL,
+    )
+    m = pat.search(text)
+    if m:
+        body = m.group(2).strip()
+    else:
+        # First non-empty paragraph after the title.
+        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        body = paragraphs[1] if len(paragraphs) > 1 else (paragraphs[0] if paragraphs else "")
+    if len(body) > 800:
+        body = body[:800].rsplit(" ", 1)[0] + " …"
+    return body
+
+
+def extract_deferred_bugs(quality_dir: Path) -> list:
+    """Return BUG entries from BUGS.md whose disposition is
+    'deferred', for inclusion in AGENTS.md's Caveats section.
+    Each entry is (bug_id, title)."""
+    path = quality_dir / "BUGS.md"
+    if not path.is_file():
+        return []
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    import re as _re
+    out: list = []
+    headings = list(_re.finditer(
+        r"^###\s+(BUG-[A-Za-z0-9]+)(?:\s*[:.\-]\s*(.+))?$",
+        text,
+        _re.MULTILINE,
+    ))
+    for i, match in enumerate(headings):
+        bug_id = match.group(1)
+        title = (match.group(2) or "").strip()
+        # Section runs from this heading's end to the next BUG heading
+        # (or EOF). Bounding the search per-bug prevents disposition
+        # lines from a later bug bleeding into this one's match.
+        section_start = match.end()
+        section_end = (
+            headings[i + 1].start() if i + 1 < len(headings) else len(text)
+        )
+        section = text[section_start:section_end]
+        if _re.search(
+            r"(?im)^\s*-?\s*\*?\*?\s*Disposition\*?\*?\s*[:\-]\s*deferred",
+            section,
+        ):
+            out.append((bug_id, title or "(no title)"))
+    return out
+
+
+def generate_agents_md_content(repo_dir: Path) -> str:
+    """Assemble the AGENTS.md body. Pulls role-map summary,
+    EXPLORATION narrative, REQ/BUG counts, gate verdict, and deferred
+    BUG list. v1.5.4 Phase 3.6.5 (B-17)."""
+    repo_dir = Path(repo_dir)
+    quality = repo_dir / "quality"
+    role_map_lib = _load_role_map_module()
+    role_map_data = role_map_lib.load_role_map(role_map_lib.default_path(repo_dir))
+    summary = (
+        role_map_lib.summarize_role_map(role_map_data)
+        if role_map_data is not None
+        else None
+    )
+    pcts = (summary or {}).get("percentages") or {}
+
+    # Counts from INDEX (best-effort; INDEX may be the stub).
+    index_path = quality / "INDEX.md"
+    req_count = 0
+    bug_count = 0
+    gate_verdict = "unknown"
+    if index_path.is_file():
+        payload = load_index_payload(index_path)
+        if isinstance(payload, dict):
+            summary_block = payload.get("summary") or {}
+            reqs = summary_block.get("requirements") or {}
+            if isinstance(reqs, dict):
+                req_count = sum(
+                    int(v) for v in reqs.values() if isinstance(v, int)
+                )
+            bugs = summary_block.get("bugs") or {}
+            if isinstance(bugs, dict):
+                # Severity-only sum (matches RUN_INDEX convention).
+                bug_count = sum(
+                    int(bugs.get(s, 0))
+                    for s in ("HIGH", "MEDIUM", "LOW")
+                    if isinstance(bugs.get(s, 0), int)
+                )
+            gate_verdict = str(summary_block.get("gate_verdict") or "unknown")
+
+    narrative = extract_exploration_narrative(quality)
+    deferred = extract_deferred_bugs(quality)
+
+    lines: list = []
+    lines.append(f"{QPB_AGENTS_SENTINEL}")
+    lines.append("")
+    lines.append("# AGENTS.md")
+    lines.append("")
+    lines.append(
+        "Per-project orientation for agents working on this repository "
+        "after a Quality Playbook run."
+    )
+    lines.append("")
+    lines.append("## What this is")
+    lines.append("")
+    if summary:
+        lines.append(f"- Files in scope: **{summary.get('file_count', 0)}**")
+        lines.append(
+            f"- Surface mix: skill {pcts.get('skill_share', 0.0):.0%} / "
+            f"code {pcts.get('code_share', 0.0):.0%} / "
+            f"tool {pcts.get('tool_share', 0.0):.0%} / "
+            f"other {pcts.get('other_share', 0.0):.0%}"
+        )
+        lines.append(f"- Role-map provenance: `{summary.get('provenance', 'unknown')}`")
+    else:
+        lines.append(
+            "- (No role map present — Phase 1 has not yet produced "
+            "`quality/exploration_role_map.json`.)"
+        )
+    lines.append(f"- Requirements derived: **{req_count}**")
+    lines.append(f"- Bugs surfaced: **{bug_count}**")
+    lines.append(f"- Gate verdict: **{gate_verdict}**")
+    lines.append("")
+    if narrative:
+        lines.append("### Architecture / domain (excerpt from EXPLORATION.md)")
+        lines.append("")
+        lines.append(narrative)
+        lines.append("")
+    lines.append("## Read first")
+    lines.append("")
+    lines.append("- `quality/REQUIREMENTS.md` — derived behavioral requirements + use cases.")
+    lines.append("- `quality/BUGS.md` — every defect surfaced this run, with disposition.")
+    lines.append("- `quality/EXPLORATION.md` — the architectural framing Phase 1 produced.")
+    lines.append("- `quality/INDEX.md` — run metadata (timestamps, gate verdict, role breakdown).")
+    lines.append(
+        "- `quality/exploration_role_map.json` — per-file role tagging "
+        "that drives Phase 2 wiring."
+    )
+    lines.append("- `quality/writeups/BUG-<id>.md` — per-bug writeups.")
+    lines.append("- `quality/patches/` — fix and regression-test patches.")
+    lines.append("- `quality/code_reviews/`, `quality/spec_audits/`, `quality/results/`, `quality/control_prompts/`, `quality/mechanical/` — intermediate pipeline artifacts.")
+    lines.append("- `quality/previous_runs/` — historical archives.")
+    lines.append("")
+    lines.append("## How to extend the review")
+    lines.append("")
+    # v1.5.4 Phase 3.7 Fix 4 (Round 8 HIGH): use the actual flag names
+    # (positional `.` for the target; `--phase` singular). The earlier
+    # template strings referenced --target / --phases which don't
+    # exist; every v1.5.4 run produced an AGENTS.md whose extension
+    # commands would fail with "unrecognized arguments".
+    lines.append("- Re-run a single phase: `python -m bin.run_playbook . --phase <N>`.")
+    lines.append(
+        "- Run an iteration strategy: `python -m bin.run_playbook . "
+        "--strategy <gap|unfiltered|parity|adversarial> --next-iteration`."
+    )
+    lines.append(
+        "- Re-run the gate offline: "
+        "`python3 .github/skills/quality_gate.py .` from the target root."
+    )
+    lines.append("")
+    lines.append("## Caveats and known issues")
+    lines.append("")
+    if deferred:
+        for bug_id, title in deferred:
+            lines.append(f"- **{bug_id}** — {title} (disposition: deferred)")
+    else:
+        lines.append(
+            "- No bugs were marked `disposition: deferred` in this run."
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# CLI — compatibility-fork subcommands (dispatched by quality_playbook)
+# ---------------------------------------------------------------------------
+
+
+def finalize_index_main(argv: Optional[List[str]] = None) -> int:
+    """`quality_playbook finalize-index [<repo>]` (CC-03)."""
+    parser = argparse.ArgumentParser(
+        prog="quality_playbook finalize-index",
+        description=(
+            "Map the last `RESULT: GATE …` line of "
+            "quality/results/quality-gate.log into quality/INDEX.md "
+            "summary.gate_verdict (PASSED→pass, PASSED WITH CLEANUP "
+            "NEEDED→pass-with-cleanup, FAILED→fail) and stamp "
+            "run_timestamp_end / duration_seconds. Run it after the "
+            "Phase 6 gate and before spawning the auditor."
+        ),
+    )
+    parser.add_argument("repo", nargs="?", default=".", help="Target repo root (default: .)")
+    args = parser.parse_args(argv)
+    try:
+        result = finalize_index_gate_verdict(Path(args.repo))
+    except ArchiveError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(f"gate_result: RESULT: GATE {result['result']}")
+    print(f"gate_verdict: {result['gate_verdict']}")
+    print(f"run_timestamp_end: {result['run_timestamp_end']}")
+    print(f"duration_seconds: {result['duration_seconds']}")
+    return 0
+
+
+def agents_md_main(argv: Optional[List[str]] = None) -> int:
+    """`quality_playbook agents-md [<repo>]` (CC-15)."""
+    parser = argparse.ArgumentParser(
+        prog="quality_playbook agents-md",
+        description=(
+            "Write or regenerate the QPB-managed AGENTS.md at the target "
+            "repo root from the quality/ artifacts. An operator-authored "
+            "AGENTS.md (no QPB sentinel in its first 5 non-empty lines) "
+            "is preserved untouched."
+        ),
+    )
+    parser.add_argument("repo", nargs="?", default=".", help="Target repo root (default: .)")
+    args = parser.parse_args(argv)
+    repo = Path(args.repo)
+    target = repo / "AGENTS.md"
+    outcome = safe_write_agents_md(target, generate_agents_md_content(repo))
+    print(f"AGENTS.md {outcome}: {target}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CLI — operator-driven archive for failed / partial runs
 # ---------------------------------------------------------------------------
 

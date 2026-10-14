@@ -1143,8 +1143,36 @@ class ValidatePhaseArtifactsTests(unittest.TestCase):
                 "# Progress\n\n## Terminal Gate Verification\n\nPASSED\n",
                 encoding="utf-8",
             )
+            # Compatibility fork (CC-05): Phase 6 is complete only once
+            # INDEX.md carries a final gate_verdict.
             ok, reason = lib.validate_phase_artifacts(quality, 6)
-            self.assertTrue(ok, msg=reason)
+            self.assertFalse(ok)
+            self.assertIn("INDEX.md", reason)
+            (quality / "INDEX.md").write_text(
+                "# Index\n\nno json here\n", encoding="utf-8",
+            )
+            ok, reason = lib.validate_phase_artifacts(quality, 6)
+            self.assertFalse(ok)
+            self.assertIn("parseable", reason)
+            for verdict in ("pending", None, "unknown"):
+                (quality / "INDEX.md").write_text(
+                    "# Index\n\n```json\n"
+                    + json.dumps({"summary": {"gate_verdict": verdict}})
+                    + "\n```\n",
+                    encoding="utf-8",
+                )
+                ok, reason = lib.validate_phase_artifacts(quality, 6)
+                self.assertFalse(ok, msg=f"verdict {verdict!r} accepted")
+                self.assertIn("not final", reason)
+            for verdict in ("pass", "pass-with-cleanup", "partial", "fail"):
+                (quality / "INDEX.md").write_text(
+                    "# Index\n\n```json\n"
+                    + json.dumps({"summary": {"gate_verdict": verdict}})
+                    + "\n```\n",
+                    encoding="utf-8",
+                )
+                ok, reason = lib.validate_phase_artifacts(quality, 6)
+                self.assertTrue(ok, msg=reason)
 
 
 class ValidateRunStateFileTests(unittest.TestCase):
