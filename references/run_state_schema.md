@@ -56,7 +56,7 @@ ALWAYS the first line. Records schema metadata.
 |---|---|---|---|
 | `event` | string | yes | Always `"_index"` |
 | `ts` | string | yes | ISO 8601 UTC |
-| `schema_version` | string | yes | `"1.5.6"` |
+| `schema_version` | string | yes | `"1.5.8"` (current, per "Schema versioning"; older files carry `"1.5.6"` and stay readable — compatibility fork, CC-13) |
 | `event_types` | array of string | yes | Every event type this file uses |
 | `benchmark` | string | yes | E.g. `"chi-1.3.45"`, `"virtio-1.5.1"` |
 | `lever_state` | string | yes | E.g. `"pre-pattern7"`, `"post-pattern7"`, `"baseline"` |
@@ -228,7 +228,7 @@ Marks the end of the playbook run.
 |---|---|---|---|
 | `event` | string | yes | `"_index"` |
 | `ts` | string | yes | |
-| `schema_version` | string | yes | `"1.5.6"` |
+| `schema_version` | string | yes | `"1.5.8"` (current, per "Schema versioning"; older files carry `"1.5.6"` and stay readable — compatibility fork, CC-13) |
 | `event_types` | array of string | yes | |
 | `cycle_name` | string | yes | E.g. `"2026-05-15-pattern7-displacement-recovery"` |
 | `lever_under_test` | string | yes | E.g. `"lever-1-exploration-breadth-depth"` |
@@ -307,7 +307,7 @@ The AI verifies these conditions before appending a `phase_end` event. If any ch
 | Phase | Required conditions |
 |---|---|
 | 1 | `quality/EXPLORATION.md` exists, ≥ 120 lines (aligned with the Phase 2 startup gate in `bin/run_playbook.check_phase_gate`), contains at least one finding section (regex `^##\s+(Finding\|Open Exploration Findings\|\d+\.)` — accepts `## Finding ...`, the SKILL-prescribed exact heading `## Open Exploration Findings`, and numbered `## N.` headings) |
-| 2 | All nine fixed-name Generate-contract artifacts exist non-empty under `quality/`: `REQUIREMENTS.md`, `QUALITY.md`, `CONTRACTS.md`, `COVERAGE_MATRIX.md`, `COMPLETENESS_REPORT.md`, `RUN_CODE_REVIEW.md`, `RUN_INTEGRATION_TESTS.md`, `RUN_SPEC_AUDIT.md`, `RUN_TDD_TESTS.md`. Plus at least one non-empty `quality/test_functional.<ext>` (extension varies by primary language). Pre-v1.5.6 this row described the v1.5.5-design triage model (`EXPLORATION_MERGED.md` / `triage.md`); that mapping was never adopted by shipped SKILL.md / orchestrator_protocol.md / agent files, which always documented Phase 2 as Generate. |
+| 2 | All nine fixed-name Generate-contract artifacts exist non-empty under `quality/`: `REQUIREMENTS.md`, `QUALITY.md`, `CONTRACTS.md`, `COVERAGE_MATRIX.md`, `COMPLETENESS_REPORT.md`, `RUN_CODE_REVIEW.md`, `RUN_INTEGRATION_TESTS.md`, `RUN_SPEC_AUDIT.md`, `RUN_TDD_TESTS.md`. Plus at least one non-empty `quality/test_functional.<ext>` (extension varies by primary language). Plus `quality/requirements_manifest.json` and `quality/use_cases_manifest.json` (both checked by `run_state_lib`). The full Phase 2 manifest contract — all four record-shaped manifests, plus `citation_semantic_check.json` when there are Tier 1/2 REQs and `RUN_CONTRACT.md` when there are tool-contract REQs — is enforced by `python3 -m bin.validate_phase_artifacts . --phase 2` (A-15; compatibility fork, CC-14). Pre-v1.5.6 this row described the v1.5.5-design triage model (`EXPLORATION_MERGED.md` / `triage.md`); that mapping was never adopted by shipped SKILL.md / orchestrator_protocol.md / agent files, which always documented Phase 2 as Generate. |
 | 3 | `quality/code_reviews/` directory contains at least one review file. If `quality/BUGS.md` has any `### BUG-` heading, `quality/patches/` contains at least one `BUG-*-regression-test.patch` file. Pre-v1.5.6 this row checked `quality/RUN_CODE_REVIEW.md` (a Phase 2 Generate output, not a Phase 3 review result) — same v1.5.5-design / shipped-Generate drift class as the Phase 2 row. Cluster B reconciled. |
 | 4 | `quality/spec_audits/` directory contains at least one `*-triage.md` file AND at least one `*-auditor-*.md` file (per orchestrator_protocol.md naming convention). When neither name pattern matches, the validator falls back to a weaker "≥2 files" check — older bootstrap runs with arbitrary `.md` names still pass; the gate at Phase 6 enforces deeper conformance. Pre-v1.5.6 this row checked `quality/REQUIREMENTS.md` + `COVERAGE_MATRIX.md` (Phase 2 outputs) — same v1.5.5-design drift class. Cluster B reconciled. |
 | 5 | If `quality/BUGS.md` has confirmed `### BUG-` entries: `quality/results/tdd-results.json` exists non-empty; for every confirmed bug, `quality/writeups/BUG-NNN.md` exists AND `quality/results/BUG-NNN.red.log` exists. With no confirmed bugs the row is vacuously satisfied. Pre-v1.5.6 this row checked `quality/results/quality-gate.log` (a Phase 6 output) — same v1.5.5-design drift class. Cluster B reconciled. |
@@ -321,8 +321,8 @@ The `run_end` event additionally requires: all 6 `phase_end` events present in t
 
 When an AI session starts on a run directory:
 
-1. If `quality/run_state.jsonl` does not exist: fresh run. Write `_index` + `run_start` + `phase_start phase=1`.
-2. If it exists: read all events. Find the last `phase_start` not followed by a matching `phase_end`. Call it the "in-progress phase".
+1. Resolve the run-state log with `bin/run_state_lib.resolve_run_state_path(repo_dir)`: centralized `quality/logs/<run-id>/run_state.jsonl` first, legacy `quality/run_state.jsonl` as the fallback (compatibility fork, CC-13). If it returns no path: fresh run. Write `_index` + `run_start` + `phase_start phase=1` to the new run's log (`quality/logs/<run-id>/run_state.jsonl`, or `quality/run_state.jsonl` under `--logs-flat` / `QPB_LOGS_LEGACY=1`).
+2. If it returns a path: read all events from it. Find the last `phase_start` not followed by a matching `phase_end`. Call it the "in-progress phase".
 3. Verify the in-progress phase's expected artifacts (per cross-validation rules above):
    - If artifacts complete: append the missing `phase_end` event and proceed to the next phase. Note: this is the "session crashed mid-phase but the work is done" recovery path. For Phase 6, "complete" includes the row-6 INDEX.md check — a `gate_verdict` still at `"pending"` means Phase 6 is incomplete.
    - If artifacts incomplete: re-run that phase from scratch. The prior session left a partial state that can't be safely resumed.

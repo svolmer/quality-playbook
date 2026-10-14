@@ -66,19 +66,28 @@ Run:
     python3 <resolved_quality_gate_path> . > quality/results/quality-gate.log 2>&1
     echo "exit=$?" >> quality/results/quality-gate.log
 
-Extract the literal last two verdict lines — the gate prints exactly:
+Extract the witness: the LAST `RESULT: GATE …` line in the log and the
+`Total:` line immediately preceding it (compatibility fork, CC-04). They
+are not the log's final two lines — the gate prints a verdict
+explanation and a `::QPB::` sentinel after the RESULT line, and the
+command above appends `exit=…`. The pair takes exactly one of three
+shapes:
 
-    Total: N FAIL, M WARN
+    Total: 0 FAIL, M WARN
     RESULT: GATE PASSED
-       (or: RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
-        or: RESULT: GATE FAILED — N substantive issue(s) must be fixed)
+
+    Total: N CLEANUP, M WARN
+    RESULT: GATE PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s)
+
+    Total: N FAIL (S substantive, R record-keeping), M WARN
+    RESULT: GATE FAILED — S substantive issue(s) must be fixed
 
 This is the **MANDATORY gate-verdict witness** (v1.5.7 A-13). QUOTE THESE
 TWO LINES VERBATIM in your return. Do not summarize, paraphrase, or
-interpret. If `quality/results/quality-gate.log` is empty or does not
-contain these two lines, the gate did not run successfully — it was never
-invoked or its output was not captured; re-run it before returning
-anything.
+interpret. If `quality/results/quality-gate.log` is empty or contains
+no `RESULT: GATE …` line, the gate did not run successfully — it was
+never invoked or its output was not captured; re-run it before
+returning anything.
 
 **Three-state verdict (v1.5.7 089c F15).** The gate distinguishes
 substantive failure (the work wasn't done correctly) from audit
@@ -137,7 +146,7 @@ auditor.
 Your return to the parent MUST contain exactly:
 
     GATE WITNESS (verbatim):
-    Total: <N> FAIL, <M> WARN
+    Total: <the Total: line preceding the RESULT line — one of the three Step 2 shapes>
     RESULT: GATE [PASSED | PASSED WITH CLEANUP NEEDED — N audit record-keeping gap(s) | FAILED — N substantive issue(s) must be fixed]
 
     VALIDATOR WITNESS (verbatim):
