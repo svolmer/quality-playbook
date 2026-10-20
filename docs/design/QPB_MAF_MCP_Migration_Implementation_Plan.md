@@ -714,9 +714,17 @@ refused) and session recovery work. Settled against the plan's assumptions:
   test must pin that.
 - Cost is token-priced with a large default baseline (about 19,000 input tokens for a
   trivial prompt; about 3,100 hardened), so budgets are measured in tokens.
-Still open before M1 can close: pending approvals across a restart (`RequestPort`), the
-operator-confirmation channel, and the VS Code Copilot Chat check. 23 of the 25-call
-allowance was used.
+Later the same day: a pending `RequestPort` request survives a host restart (same id, the run
+finishes only once answered), but **MAF accepts a wrong-id or duplicate response without
+error and the run then fails**, so the host validates request id, single use and expiry
+itself. The out-of-band channel (`qpb-agent confirm`, the only receipt writer, refusing
+without a real terminal) is built and tested on Debian 13 and, for the non-terminal steps, on
+Windows. It fails closed for model-authored and piped answers but **not for an adversarial
+agent running as the operator** (a same-user process can write a receipt file; the test
+demonstrates it). That residual risk is the operator's call: accept it, or choose MCP
+elicitation or a signed receipt (both untested).
+Still open before M1 can close: that decision, an interactive `confirm` run on Windows, and
+the VS Code Copilot Chat check. 23 of the 25-call allowance was used.
 
 **Stop/go:** an exact compatible package set, a tool package that installs and
 launches under both clients on both OSes, and demonstrated controls. If model
