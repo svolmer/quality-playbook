@@ -1,7 +1,7 @@
 # Compatibility fork: `svolmer/quality-playbook` `compat/v1.6.0-maf`
 
 This branch is a **compatibility fork** of `andrewstellman/quality-playbook`
-at `400f66f` (v1.6.0). It exists so that the QualityPlaybook.Agent host
+originally at `400f66f` (v1.6.0), see "Branch history" below. It exists so that the QualityPlaybook.Agent host
 (Microsoft Agent Framework + MCP) can run QPB without contradictions in the
 upstream contract. The plan's fork rules apply: changes are minimal, tested
 and documented; the methodology, prompts, schemas and validators are
@@ -31,9 +31,34 @@ resolution below on 2026-10-14:
   A fork suffix such as `1.6.0+maf.1` would change the stamps and break
   stamp-consistency checks. The fork identity is recorded here and in the
   host's `deps/quality-playbook.lock.json` (`compatibilityFork`) instead.
-- **Releases** are annotated tags on `compat/v1.6.0-maf`:
-  `v1.6.0-maf.1` (`23a5067`) and `v1.6.0-maf.2` (the commit that adds
-  this line).
+- **Releases** are annotated tags: `v1.6.0-maf.1` (`23a5067`) and
+  `v1.6.0-maf.2` (`1319df0`). **The tags are the release identity, and the
+  hosts pin by commit.** After the rebase described below they mark the
+  pre-rebase commits, which are no longer on the branch.
+
+## Branch history (rebased onto `main`, 2026-10-20)
+
+`compat/v1.6.0-maf` was first published at `1319df0`, on top of upstream
+`400f66f`. It was then rebased onto this repository's `main` (`1001b38`), so
+the **branch is no longer based on `400f66f`**. Nothing the skill runs changed:
+
+- The rebased commits carry identical changes (the patch-ids match the
+  originals): `3a17786` is `23a5067` (maf.1) and `b763889` is `1319df0` (maf.2).
+- Every runtime path (`bin/`, `plugins/`, `references/`, `schemas.md`,
+  `SKILL.md`, `ai_context/`, `AGENTS.md`, `pyproject.toml`) is byte-identical to
+  `1319df0`. `main` has not changed the skill since v1.6.0.
+- The branch tree additionally carries what `main` adds on top of `400f66f`:
+  `evidence/`, `runner/`, `docs/codebase/`, the migration plan under
+  `docs/design/`, a changed `README.md` and `.github/workflows/publish.yml`, and
+  without the virtio files under `repos/docs_gathered/`. A payload built from the
+  branch is therefore larger (1439 files, about 50 MB) than the one built from
+  `1319df0` (1365 files, about 37 MB), and the two have different payload hashes.
+- `v1.6.0-maf.1` and `v1.6.0-maf.2` are not ancestors of the branch. The host
+  keeps pinning `1319df0`; it is reachable through the `v1.6.0-maf.2` tag.
+- The migration plan is not part of this fork. It lives on `main`; the copy under
+  `docs/design/` on this branch is `main`'s frozen first version.
+- Future fork work (maf.3 and later) lands on this branch as new commits with a
+  new tag, and a host moves to it by changing its pin deliberately.
 
 ## CC-03: the receipted gate verdict is written into INDEX.md before the audit
 
