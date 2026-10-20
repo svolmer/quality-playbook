@@ -300,13 +300,13 @@ must be unreachable from the new host, including nested derivation calls.
   preflight in section 5.3 and is the installation verification command.
 - Include an MCP `server.json` so the package is discoverable with the MCP
   package type.
-- Packaging default: **portable, framework-dependent** (installing a tool
-  already requires the .NET 10 SDK, on both operating systems). Move to
-  RID-specific packages only if the Copilot SDK or its CLI ships
-  RID-specific assets (decided in M1). If RID-specific, `dotnet pack` emits a
-  pointer package plus one package per RID (at least a Windows and a Linux
-  RID) and **all must be published together**. Native AOT is not assumed; MAF
-  and the Copilot SDK are unverified for AOT.
+- Packaging: **RID-specific, decided by M1 evidence.** The Copilot SDK downloads
+  and bundles its runtime (208 MB raw) per RID at build time, so `dotnet pack`
+  emits a pointer package plus `win-x64` (101 MB) and `linux-x64` (109 MB)
+  packages, and `dotnet tool install` selects the right one. **All three must be
+  published together.** Native AOT is not assumed; MAF and the Copilot SDK are
+  unverified for AOT. On Windows the tool also installs a `qpb-agent.cmd` shim, so
+  client configs use the absolute `qpb-agent.exe` path that `doctor` prints.
 
 ### 5.2 Installation modes and client configuration
 
@@ -363,10 +363,11 @@ verifies both clients on both operating systems.
   Store/install-manager alias; never invoke bare `python3` there. On Linux a
   `python3` that satisfies the version check is acceptable, always invoked by
   resolved absolute path.
-- **Copilot:** the Learn page says some SDKs rely on an installed CLI. M1
-  determines whether the .NET SDK requires a separately installed Copilot CLI,
-  how it is located and version-pinned on each OS, and how authentication is
-  detected. `doctor` reports the result. The tool cannot silently install it.
+- **Copilot:** M1 showed the .NET SDK bundles its own runtime (pinned to the SDK
+  version: SDK 1.0.14 brings runtime 1.0.85), so **no separate Copilot CLI install is
+  needed**. Authentication is picked up from the GitHub CLI (`gh auth login`); `doctor`
+  reports the runtime, the signed-in account, and the available models. The tool never
+  installs or logs in on the operator's behalf.
 - **Attribution:** QPB's attribution banner (AGENTS.md install step 7) is
   returned in `qpb_install`'s structured result and written to stderr, never to
   stdout.
@@ -697,6 +698,25 @@ and read-only-payload problems before later milestones depend on them.
   confirmation, `doctor` output, no stdout noise on the transport.
 - Confirmation channel (6.3): what each client actually shows the operator, and
   whether a model can invoke the chosen channel.
+
+**Status (2026-10-20): part 1 and most of part 2 done; not closed.** Evidence is in
+the host repo's `docs/m1/README.md`. Established: the RID-specific tool installs and
+runs on Windows and Debian 13 (`doctor` exercises payload, installer, utilities and the
+Copilot runtime); stdio transport; Claude Code connects; a custom tool runs through a MAF
+agent; custom tools and built-in shell are permission-gated; the approval-hook hazard is
+real; cancellation, process ownership, checkpoint resume (at-least-once, identity change
+refused) and session recovery work. Settled against the plan's assumptions:
+- **An unknown model id silently falls back to another model** (observed
+  `claude-sonnet-5`), so the host preflights ids against the model list and verifies the
+  reported model on every call.
+- **Repository instructions and hooks load and run by default**, with no prompt; only a
+  hardened session profile (documented in M1 finding 18) prevents it, and a canary-fixture
+  test must pin that.
+- Cost is token-priced with a large default baseline (about 19,000 input tokens for a
+  trivial prompt; about 3,100 hardened), so budgets are measured in tokens.
+Still open before M1 can close: pending approvals across a restart (`RequestPort`), the
+operator-confirmation channel, and the VS Code Copilot Chat check. 23 of the 25-call
+allowance was used.
 
 **Stop/go:** an exact compatible package set, a tool package that installs and
 launches under both clients on both OSes, and demonstrated controls. If model
