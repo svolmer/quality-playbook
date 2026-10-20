@@ -723,8 +723,14 @@ Windows. It fails closed for model-authored and piped answers but **not for an a
 agent running as the operator** (a same-user process can write a receipt file; the test
 demonstrates it). That residual risk is the operator's call: accept it, or choose MCP
 elicitation or a signed receipt (both untested).
-Still open before M1 can close: that decision, an interactive `confirm` run on Windows, and
-the VS Code Copilot Chat check. 23 of the 25-call allowance was used.
+Then verified end to end on Windows with VS Code Copilot Chat as the client: the receipt was
+written from a real console, the first resume was accepted with the operator's own answer, and
+the second was rejected as already consumed (evidence: the host ledger and the Copilot session
+record). Two behaviors shape the design: the model skipped the resume tool twice and misreported
+one approval, so a resume must not depend on the model and verdicts come from host evidence; and
+VS Code's client-side approvals (including an allow-all switch) never reach the host.
+Still open before M1 is declared closed: only the operator's decision on the residual risk. 23 of
+the 25-call allowance was used.
 
 **Stop/go:** an exact compatible package set, a tool package that installs and
 launches under both clients on both OSes, and demonstrated controls. If model
