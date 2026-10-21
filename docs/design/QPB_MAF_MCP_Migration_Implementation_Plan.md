@@ -832,9 +832,13 @@ contracts on the selected acceptance target.
   correctly blocked by the real validators, which exposed two prompt-versus-validator contradictions (CC-23, CC-24, not yet in the fork) and
   that the host must render `PROGRESS.md` itself from the run-state log (CC-25).
 - Operator decision 2026-10-21: the prompt wording is fixed and the validator stays strict. Fork release `v1.6.0-maf.4` (commit `e8d6d2e`, prose only, with
-  a test pinning the prompt against the validator) resolves CC-23 and CC-24; a live run on the maf.4 prompt alone completed. It is **not yet pushed**.
-- Claude Code drove the installed tool end to end (headless). **Open:** the push of maf.4; the manual VS Code Copilot Chat check; the spectre.console
-  acceptance run, which needs its own live-call allowance.
+  a test pinning the prompt against the validator) resolves CC-23 and CC-24; a live run on the maf.4 prompt alone completed. Pushed.
+- Claude Code drove the installed tool end to end (headless).
+- **Acceptance target (Windows):** Phase 1 completed on spectre.console@bbbb5729 with sonnet-5.5 (16 model calls; 78 of the 1,000 allowed across five
+  attempts). Haiku was blocked by the validators and is not adequate on this target. QPB enforces only a ceiling on the role map, and the run's map
+  covers 258 of 784 files (33%); the host reports that as an observation. Not run on Debian 13.
+- **Open:** the manual VS Code Copilot Chat check; an operator decision on role-map coverage and on the default Phase 1 model; a Debian acceptance run
+  if wanted (needs an authenticated Copilot in the container and its own allowance).
 
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
