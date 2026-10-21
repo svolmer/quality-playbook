@@ -831,8 +831,10 @@ contracts on the selected acceptance target.
 - A **live** Phase 1 run on the small fixture completed with haiku (16 model calls; 174 across four runs, 400 allowed). Three earlier runs were
   correctly blocked by the real validators, which exposed two prompt-versus-validator contradictions (CC-23, CC-24, not yet in the fork) and
   that the host must render `PROGRESS.md` itself from the run-state log (CC-25).
-- Claude Code drove the installed tool end to end (headless). **Open:** the manual VS Code Copilot Chat check; the spectre.console acceptance run,
-  which needs its own live-call allowance; the operator's decision on CC-23 and CC-24.
+- Operator decision 2026-10-21: the prompt wording is fixed and the validator stays strict. Fork release `v1.6.0-maf.4` (commit `e8d6d2e`, prose only, with
+  a test pinning the prompt against the validator) resolves CC-23 and CC-24; a live run on the maf.4 prompt alone completed. It is **not yet pushed**.
+- Claude Code drove the installed tool end to end (headless). **Open:** the push of maf.4; the manual VS Code Copilot Chat check; the spectre.console
+  acceptance run, which needs its own live-call allowance.
 
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
