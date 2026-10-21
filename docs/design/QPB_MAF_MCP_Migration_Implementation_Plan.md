@@ -777,7 +777,7 @@ reasoning through MAF and assert no one-shot AI CLI launch.
 **Stop/go:** deterministic receipts remain faithful and authoritative; all AI
 seams have a demonstrated MAF route or an explicit blocking work item.
 
-**M2 status (2026-10-21): implemented and verified locally; one operator action outstanding.** Evidence is in
+**M2 status (2026-10-21): implemented, verified, and published.** Evidence is in
 the host repo's `docs/m2/README.md`.
 - Typed adapter, controlled repository tools (path guard, budgets, receipts, `git apply` patching, a
   `dotnet restore|build|test` grammar, job-object or process-group ownership), and a mailbox bridge that serves
@@ -788,8 +788,8 @@ the host repo's `docs/m2/README.md`.
 - The re-pin moves the host to the rebased branch's larger tree (1440 entries, 50.0 MB, +1.0 MB compressed).
 - 197 tests pass on Windows and on Debian 13; the full upstream suite has the identical failure set on the
   base and on maf.3.
-- **Outstanding:** the fork branch `compat/v1.6.0-maf` and tag `v1.6.0-maf.3` are not pushed, so the new pin is
-  reproducible only from the local fork repository until the operator pushes them.
+- **Fork published** by the operator on 2026-10-21 (branch and `v1.6.0-maf.3` on origin; the pinned commit was
+  fetched from GitHub by SHA to confirm). Nothing outstanding for M2; M3 may start.
 
 ### M3 - Ship the tracked MCP job lifecycle and Phase 1 vertical slice
 
