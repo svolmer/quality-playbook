@@ -21,6 +21,9 @@ resolution below on 2026-10-14:
   resolved in maf.1 as part of CC-05. That closes all 21 entries.
 - **`v1.6.0-maf.3`**: CC-22, found while building the host's Python adapter
   (M2): the Phase 0 validator's AI-CLI check blocks a host that runs no AI CLI.
+- **`v1.6.0-maf.4`**: CC-23 and CC-24, found by the host's first live Phase 1 run (M3):
+  two places where the Phase 1 prompt taught a form the Phase 1 validator does not
+  accept. Prose only; the validator is unchanged and stays strict.
 
 ## Identity and version
 
@@ -34,7 +37,7 @@ resolution below on 2026-10-14:
   stamp-consistency checks. The fork identity is recorded here and in the
   host's `deps/quality-playbook.lock.json` (`compatibilityFork`) instead.
 - **Releases** are annotated tags: `v1.6.0-maf.1` (`23a5067`),
-  `v1.6.0-maf.2` (`1319df0`) and `v1.6.0-maf.3` (on this branch, see the tag). **The tags are the release identity, and the
+  `v1.6.0-maf.2` (`1319df0`), `v1.6.0-maf.3` and `v1.6.0-maf.4` (both on this branch, see the tags). **The tags are the release identity, and the
   hosts pin by commit.** After the rebase described below they mark the
   pre-rebase commits, which are no longer on the branch.
 
@@ -332,6 +335,45 @@ still reported under the flag; a clean install becomes `status=ok` with the
 CLI absent; an unknown mode is refused. Mutation check executed: with the
 branch that honours the flag disabled, `test_host_mode_maf_skips_the_check_and_says_so`
 fails.
+
+## v1.6.0-maf.4
+
+Prose only, in `phase_prompts/phase1.md`. **No validator or gate check is changed or relaxed**: the operator decided (2026-10-21) that the
+prompt must be fixed and the validator kept strict. Both contradictions were found by a real model (claude-haiku-5.5, through the host's
+Copilot SDK session) that followed the Phase 1 prompt to the letter and was rejected by the Phase 1 validator, in the first and second live runs.
+
+### CC-23: the candidate-bug stage is a list item, `- Stage: ...`
+
+**Contradiction.** The prompt's "Exact syntax" block and the Candidate Bugs section showed the stage as a bare line (`Stage: open exploration`).
+`run_state_lib._CANDIDATE_STAGE_RE` is `^\s*-\s*Stage\s*:`, so a bare line counts as no stage, the entry joins neither bucket, and the gate
+fails with "candidate bugs source mix ... found 0". The prompt's own warning (an entry with no `Stage:` line is counted toward neither bucket)
+could not have helped, because the model believed it had one.
+
+**Resolution.** The three examples, the sentence describing the parser and the Candidate Bugs item now show and require `- Stage: ...`, say that
+the line is a list item directly under the entry, and say that a bare `Stage: ...` line is not recognized.
+
+### CC-24: Quality Risks must be a numbered list
+
+**Contradiction.** The prompt described `## Quality Risks` as "Numbered or bulleted". The validator (check 16) counts only numbered entries
+(`_slice_numbered_entries`), at least 5, each with a `file:line` citation, so a bulleted section fails with "found 0 with file:line".
+
+**Resolution.** The prompt now says a numbered list (`1.`, `2.`, ...), that the gate counts only numbered entries, at least 5, each with a
+citation, and that a bulleted list is not counted.
+
+### Tests
+
+- New `bin/tests/test_phase1_prompt_matches_validator.py` (6 tests): every indented stage example in the rendered prompt is matched by the
+  validator's own stage regex; the prompt names the leading dash and warns about the bare form; the Candidate Bugs instruction uses the list-item
+  form; Quality Risks says numbered and that bullets are not counted; entries written exactly as the prompt now teaches are counted by the
+  validator's own parsers; and the validator still rejects a bare `Stage:` line and a bulleted list (it was not loosened). Mutation check
+  executed: against the maf.3 prompt text four of the six fail.
+- `test_phase_prompts_externalized.EXPECTED_HASHES` for `phase1_no_seeds_True` (32967 to 33372) and `phase1_no_seeds_False` (32770 to 33175),
+  recomputed with the sanctioned `run_playbook.phase1_prompt()` recapture. That baseline update is the change-acknowledgement signal.
+
+### Not in this fork
+
+`PROGRESS.md` (host CC-25): a weaker model also ignored the exact checkbox template. The prompt's template is already exact and the validator's
+rule is documented; the host renders the file from the run-state log when it is the only failure, as the Mode B runner does. No fork change.
 
 ## Host-side deltas (not in this fork; recorded for traceability)
 

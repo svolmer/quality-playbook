@@ -330,8 +330,11 @@ class PhasePromptByteEqualityTests(unittest.TestCase):
         # that consumes it. Until this, step 2 asked the agent to record
         # its read with no channel to record it through, so Lane B could
         # not reach a byte-citable FORMAL_DOC at all. Hashes recomputed.
-        "phase1_no_seeds_True":   (32967, "283794b0c06d15fd7d3f195678bdad8b6221acf290ec779195ca8ddcfe26eed0"),
-        "phase1_no_seeds_False":   (32770, "49aad27d89466da83bbbb0f488000d92c8be2fa1ae481eef17ece0f76bf9527d"),
+        # compat fork v1.6.0-maf.4 (CC-23, CC-24): phase1.md now shows the candidate-bug stage as the list item the validator matches
+        # (`- Stage: ...`, not a bare `Stage: ...`) and says Quality Risks must be a numbered list, as the validator counts. Prose only; the
+        # validator is unchanged. 32967 -> 33372 and 32770 -> 33175, recomputed via the sanctioned `run_playbook.phase1_prompt()` recapture.
+        "phase1_no_seeds_True":   (33372, "2be8e3c1843da17377079389b3ed7b7812a1213ed63fbbde7d2796925da042fa"),
+        "phase1_no_seeds_False":   (33175, "135834a32418cd67b759424cf48825cb6ef77467a8154999e234058fe9cff483"),
         # v1.5.7 instruction 073 Item-4 (A-19): phase2.md gained the
         # httpx-2026-05-17 missing-manifests warning (validator now
         # FAILs on ABSENT manifests, not just wrong-shape; agent must

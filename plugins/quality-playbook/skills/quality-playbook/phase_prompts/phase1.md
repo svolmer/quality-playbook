@@ -82,13 +82,13 @@ Resolve `bin/` via the documented install-root fallback — for an `install_skil
 
 **Phase 1 validator invocation is NON-OPTIONAL.** Running `python3 -m bin.validate_phase_artifacts <target> --phase 1` at the Phase 1 boundary and quoting the verbatim `RESULT: VALIDATION PASSED (phase 1)` line in your State P1 emit is the documented Phase 1 entry contract — not advisory. You may NOT report Phase 1 PASS without that quoted verdict line. Fabricating PASS against a non-compliant EXPLORATION.md is the exact failure mode this mandate exists to prevent — observed 2026-05-18 in the codex desktop self-bootstrap, which produced 15 Open Exploration Findings with no `Stage:` annotations and reported `Phase 1: PASS` anyway (the validator would have FAILed). This is the Phase 1 instance of the same prose-only-enforcement gap as A-22/A-23/A-27/A-28; structural enforcement is tracked for v1.6.x (see `docs/design/QPB_v1.6.x_Phase6_Structural_Enforcement_Proposal.md`, Slice 0).
 
-**`Stage:` annotation requirement (the validator's candidate-bug source-mix gate).** The validator (`bin/run_state_lib.py`, check 13a/13b) requires ≥2 candidate-bug entries sourced from exploration/risks AND ≥1 from pattern deep dive. It buckets each entry by a `Stage:` annotation line: the parser routes an entry to the **exploration/risks** bucket when its `Stage:` value contains `open exploration`, `quality risks`, or `risks`; any other non-empty `Stage:` value (e.g. `pattern deep dive`) routes to the **deep dive** bucket. Every candidate-bug entry in EXPLORATION.md MUST carry a `Stage:` line. Exact syntax (one per entry, immediately under the entry heading):
+**`Stage:` annotation requirement (the validator's candidate-bug source-mix gate).** The validator (`bin/run_state_lib.py`, check 13a/13b) requires ≥2 candidate-bug entries sourced from exploration/risks AND ≥1 from pattern deep dive. It buckets each entry by a `Stage:` annotation line: the parser routes an entry to the **exploration/risks** bucket when its `Stage:` value contains `open exploration`, `quality risks`, or `risks`; any other non-empty `Stage:` value (e.g. `pattern deep dive`) routes to the **deep dive** bucket. Every candidate-bug entry in EXPLORATION.md MUST carry a `Stage:` line, written as a Markdown list item — with the leading `- ` — on its own line directly under the entry (the parser matches `^\s*-\s*Stage\s*:`). Exact syntax, one per entry:
 
-    Stage: open exploration
-    Stage: quality risks
-    Stage: pattern deep dive
+    - Stage: open exploration
+    - Stage: quality risks
+    - Stage: pattern deep dive
 
-An entry with no `Stage:` line is counted toward NEITHER bucket → the gate FAILs with "candidate bugs source mix". Do NOT omit `Stage:`; do NOT invent other stage names — match the parser tokens above exactly.
+An entry with no `- Stage:` line — including one whose line is a bare `Stage: ...` without the leading `- ` — is counted toward NEITHER bucket → the gate FAILs with "candidate bugs source mix". Do NOT omit the stage line; do NOT drop the leading `- `; do NOT invent other stage names — match the parser tokens above exactly.
 
 **HALT clause.** If your runtime cannot invoke the validator (no `python3`, cannot read the target dir, cannot write `quality/`, sandbox denies the subprocess), you MUST HALT and report that limitation to the operator. You may NOT emit Phase 1 PASS without the quoted `RESULT: VALIDATION PASSED (phase 1)` line — an unverifiable Phase 1 is a HALT, never an assumed-pass. (Parallel to the Phase 6 NON-OPTIONAL mandate in `phase_prompts/phase6.md`.)
 
@@ -107,9 +107,11 @@ substitute "equivalent" headings:
    locations (multi-location traces — the entry cites two or more
    different file:line ranges).
 
-2. `## Quality Risks` — domain-knowledge risk analysis. Numbered or
-   bulleted; cite file:line where risks are concretely visible in
-   code or docs.
+2. `## Quality Risks` — domain-knowledge risk analysis. A numbered
+   list (`1.`, `2.`, ... at the start of a line; the gate counts only
+   numbered entries, and needs at least 5 of them, each with a
+   file:line citation where the risk is concretely visible in code
+   or docs). A bulleted list is not counted.
 
 3. `## Pattern Applicability Matrix` — a Markdown table with one row
    per exploration pattern from `references/exploration_patterns.md`.
@@ -131,12 +133,12 @@ substitute "equivalent" headings:
 
 5. `## Candidate Bugs for Phase 2` — numbered list of bug
    hypotheses promoted from the deep dives + open exploration. Each
-   entry has a `Stage:` line attributing the source (e.g., `Stage:
-   open exploration`, `Stage: quality risks`, or
-   `Stage: <Pattern Name>`). At least 2 entries must be sourced from
+   entry has a `- Stage:` list-item line attributing the source (e.g.,
+   `- Stage: open exploration`, `- Stage: quality risks`, or
+   `- Stage: <Pattern Name>`). At least 2 entries must be sourced from
    `open exploration` / `quality risks` AND at least 1 entry must be
    sourced from a pattern deep dive. Combo stages
-   (`Stage: open exploration + Cross-Implementation Consistency`)
+   (`- Stage: open exploration + Cross-Implementation Consistency`)
    count toward both buckets.
 
 6. `## Gate Self-Check` — proves you ran the Phase 1 gate. List each
