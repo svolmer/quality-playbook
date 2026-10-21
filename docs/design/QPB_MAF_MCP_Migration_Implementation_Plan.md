@@ -699,7 +699,7 @@ and read-only-payload problems before later milestones depend on them.
 - Confirmation channel (6.3): what each client actually shows the operator, and
   whether a model can invoke the chosen channel.
 
-**Status (2026-10-20): part 1 and most of part 2 done; not closed.** Evidence is in
+**Status (2026-10-21): closed.** Evidence is in
 the host repo's `docs/m1/README.md`. Established: the RID-specific tool installs and
 runs on Windows and Debian 13 (`doctor` exercises payload, installer, utilities and the
 Copilot runtime); stdio transport; Claude Code connects; a custom tool runs through a MAF
@@ -729,8 +729,16 @@ the second was rejected as already consumed (evidence: the host ledger and the C
 record). Two behaviors shape the design: the model skipped the resume tool twice and misreported
 one approval, so a resume must not depend on the model and verdicts come from host evidence; and
 VS Code's client-side approvals (including an allow-all switch) never reach the host.
-Still open before M1 is declared closed: only the operator's decision on the residual risk. 23 of
-the 25-call allowance was used.
+**M1 closed 2026-10-21.** The operator accepted the confirmation channel as built for the first
+release (its limit is stated in the install documentation; elicitation and signed receipts are not
+required). 23 of the 25-call allowance was used.
+
+Windows prerequisites that M1 measured and the operator accepted: **long paths enabled** (so Python can
+read the deepest payload files) and a **tool directory under about 110 characters**, because Windows
+refuses to launch a program whose own path is over 259 characters even with long paths enabled
+(259 launched, 279 failed; `copilot-runtime.exe` failed at 277-281). The default global location
+qualifies. `qpb-agent doctor` checks both, so extracting the payload to a short directory is no longer
+a first-release requirement.
 
 **Stop/go:** an exact compatible package set, a tool package that installs and
 launches under both clients on both OSes, and demonstrated controls. If model
