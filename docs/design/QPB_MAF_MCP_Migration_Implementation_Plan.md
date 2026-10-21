@@ -843,7 +843,7 @@ contracts on the selected acceptance target.
 - VS Code Copilot Chat drove the installed tool (m3.10) to a completed Phase 1 job on the small fixture (46 model calls, two repairs; verified from the
   job database, not from Chat's text).
 - **Stop/go: met, with stated limits** (live Debian acceptance run postponed by the operator; Debian covered by the scripted lifecycle and
-  confirmation suites). **Open:** the default Phase 1 model (haiku was inadequate on spectre.console).
+  confirmation suites). Operator decision 2026-10-21: the default Phase 1 model is sonnet-5.5 (tool `0.1.0-m3.12`).
 
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
