@@ -837,8 +837,10 @@ contracts on the selected acceptance target.
 - **Acceptance target (Windows):** Phase 1 completed on spectre.console@bbbb5729 with sonnet-5.5 (16 model calls; 78 of the 1,000 allowed across five
   attempts). Haiku was blocked by the validators and is not adequate on this target. QPB enforces only a ceiling on the role map, and the run's map
   covers 258 of 784 files (33%); the host reports that as an observation. Not run on Debian 13.
-- **Open:** the manual VS Code Copilot Chat check; an operator decision on role-map coverage and on the default Phase 1 model; a Debian acceptance run
-  if wanted (needs an authenticated Copilot in the container and its own allowance).
+- Operator decisions 2026-10-21: role-map coverage stays an observation; the live Debian run on the acceptance target is postponed and not required
+  for M3; a target that already tracks `quality/` is audited from a worktree without that folder (implemented in tool `0.1.0-m3.11`, found when the
+  Copilot Chat check was pointed at this repository and blocked at Phase 0 with `stale_quality_dir`).
+- **Open:** the manual VS Code Copilot Chat check (rerun on m3.11); the default Phase 1 model (haiku was inadequate on spectre.console).
 
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
