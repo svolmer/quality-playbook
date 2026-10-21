@@ -1213,10 +1213,18 @@ def check_scaffolding(target: Path) -> "list[dict]":
     return findings
 
 
-def check_environment(cli_tool: "str | None") -> "tuple[list[dict], list[dict]]":
+def check_environment(cli_tool: "str | None", *,
+                      host_mode: "str | None" = None,
+                      ) -> "tuple[list[dict], list[dict]]":
     """Return (findings, infos). Findings are blocking/remediable;
     infos are non-finding ``event=info`` lines (e.g. bash absent on a
-    not-yet-classified project — addendum §6.5)."""
+    not-yet-classified project — addendum §6.5).
+
+    ``host_mode="maf"`` (compat fork v1.6.0-maf.3, CC-22) declares that
+    a host owns every AI call, so no AI CLI is expected on PATH. It
+    skips the ``ai_cli_not_on_path`` check and nothing else, and says
+    so with an ``event=info`` line. It is a declaration the caller makes
+    explicitly, never inferred from the environment."""
     findings: "list[dict]" = []
     infos: "list[dict]" = []
     if sys.version_info < (3, 10):
@@ -1232,7 +1240,10 @@ def check_environment(cli_tool: "str | None") -> "tuple[list[dict], list[dict]]"
                              "path": import_name,
                              "dist": dist_name,
                              "detail": f"{import_name} not importable"})
-    if cli_tool:
+    if cli_tool and host_mode == "maf":
+        infos.append({"event": "info", "ai_cli_check": "skipped",
+                       "host_mode": host_mode, "tool": cli_tool})
+    elif cli_tool:
         if shutil.which(cli_tool) is None:
             findings.append({"code": "ai_cli_not_on_path",
                              "kind": "cli_on_path", "path": cli_tool,
@@ -1312,6 +1323,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ai-tool", default=None,
                    help="explicit AI tool "
                         "(claude|cursor|copilot|continue|codex|windsurf|cline|aider)")
+    p.add_argument("--host-mode", default=None, choices=["maf"],
+                   help="declare that a host process owns every AI call "
+                        "(compat fork v1.6.0-maf.3, CC-22): the AI CLI is "
+                        "then not required on PATH. Skips only the "
+                        "ai_cli_not_on_path check; every other check still "
+                        "runs. Never inferred; the caller must pass it.")
     return p
 
 
@@ -1571,7 +1588,8 @@ def main(argv: "list[str] | None" = None) -> int:
     findings.extend(scaffold_findings)
 
     cli_tool = MARKER_TO_CLI.get(marker) if marker else None
-    env_findings, infos = check_environment(cli_tool)
+    env_findings, infos = check_environment(cli_tool,
+                                            host_mode=args.host_mode)
     for f in env_findings:
         em.emit("environment_check", path=f["path"], kind=f["kind"],
                 status="fail", detail=f["detail"])

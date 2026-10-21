@@ -33,7 +33,7 @@ event=<name> nonce=<run-nonce> <field>=<value> <field>=<value> ...
 | `environment_check` | `path`, `kind`, `status`, `detail` | INSTALL_ENVIRONMENT |
 | `remediation_suggestion` | `tool`, `finding`, `severity`, `command`, `rationale`, `verify_with` | one per finding |
 | `validation_complete` | `status`, `findings` | `status` ∈ {`ok`,`remediable`,`blocked`}; `ts` (ISO-8601) present on the main paths. THE line adopters pattern-match (`event=validation_complete status=ok`). |
-| `info` | `event=info` + context-specific fields | non-finding informational lines (e.g. bash-unavailable, §6.5) |
+| `info` | `event=info` + context-specific fields | non-finding informational lines (e.g. bash-unavailable, §6.5; `ai_cli_check=skipped host_mode=maf tool=<cli>` when `--host-mode maf` skipped the AI-CLI check, compat fork maf.3 / CC-22) |
 
 ## Backward-compatibility policy
 

@@ -19,6 +19,8 @@ resolution below on 2026-10-14:
   prose-only reconciliations CC-02, CC-04, CC-06, CC-07, CC-08, CC-09,
   CC-11, CC-12, CC-13, CC-14, CC-20 and CC-21. CC-01 was already
   resolved in maf.1 as part of CC-05. That closes all 21 entries.
+- **`v1.6.0-maf.3`**: CC-22, found while building the host's Python adapter
+  (M2): the Phase 0 validator's AI-CLI check blocks a host that runs no AI CLI.
 
 ## Identity and version
 
@@ -31,8 +33,8 @@ resolution below on 2026-10-14:
   A fork suffix such as `1.6.0+maf.1` would change the stamps and break
   stamp-consistency checks. The fork identity is recorded here and in the
   host's `deps/quality-playbook.lock.json` (`compatibilityFork`) instead.
-- **Releases** are annotated tags: `v1.6.0-maf.1` (`23a5067`) and
-  `v1.6.0-maf.2` (`1319df0`). **The tags are the release identity, and the
+- **Releases** are annotated tags: `v1.6.0-maf.1` (`23a5067`),
+  `v1.6.0-maf.2` (`1319df0`) and `v1.6.0-maf.3` (on this branch, see the tag). **The tags are the release identity, and the
   hosts pin by commit.** After the rebase described below they mark the
   pre-rebase commits, which are no longer on the branch.
 
@@ -284,6 +286,52 @@ against the ledger.
 - **CC-21:** SKILL.md and `what_just_happened.md` say fourteen states and a
   10-rule classifier; `phase6.md` defers end-of-baseline state selection to
   the classifier (S, then CN, then B).
+
+## v1.6.0-maf.3
+
+This change relaxes exactly one check, and only when the caller declares it.
+It is the single place where the validator cannot tell a host that owns every
+AI call from an installation that is missing its AI CLI.
+
+### CC-22: `qpb_validate --host-mode maf` skips the AI-CLI check and nothing else
+
+**Contradiction.** `qpb_validate.check_environment` requires the AI tool's CLI
+on PATH (`ai_cli_not_on_path`, detected from the install marker: `.claude`
+means `claude`). A host that answers every AI request itself (Microsoft Agent
+Framework through the GitHub Copilot SDK; the plan's section 6 forbids
+launching a one-shot AI CLI) never has one, so a correct install reports
+`status=blocked` on a finding that cannot apply. Found by the host's M1
+`doctor` and confirmed by its M2 adapter parity tests; recorded in the host's
+`docs/m0/contract-contradictions.md` as CC-22.
+
+**Resolution.**
+
+- New option `--host-mode maf` on `qpb_validate.py`; the only accepted value
+  is `maf` (anything else is an argparse error, exit 2).
+- `check_environment(cli_tool, host_mode=...)` skips **only** the
+  `ai_cli_not_on_path` check. It emits `event=info ai_cli_check=skipped
+  host_mode=maf tool=<cli>` so the omission is visible in the output and in any
+  receipt of it.
+- **Never inferred.** Nothing reads the environment or PATH to decide; the
+  caller must pass the flag. Without it the behaviour is byte-for-byte the
+  upstream behaviour.
+- Everything else still runs and still fails: the install closure
+  (`install_partial`, `install_absent`, version skew), the scaffolding
+  (`scaffolding_missing_*`), the Python version, the optional bash info.
+- The finding code, its remediation catalog entry and the event names are
+  unchanged. The `info` row of `references/qpb_validate_event_schema.md`
+  documents the new fields. No phase prompt, SKILL.md text or gate changes.
+- Not changed, deliberately: `bin/run_playbook.py` and its agent-context
+  refusal. The host never starts the runner, so there is nothing to carve out;
+  the refusal stays as a guard.
+
+**Tests.** New `bin/tests/test_qpb_validate_host_mode.py` (9 tests): the
+finding without the flag; the skip and its info line with it; the Python
+version check, the bash info, a damaged install and missing scaffolding all
+still reported under the flag; a clean install becomes `status=ok` with the
+CLI absent; an unknown mode is refused. Mutation check executed: with the
+branch that honours the flag disabled, `test_host_mode_maf_skips_the_check_and_says_so`
+fails.
 
 ## Host-side deltas (not in this fork; recorded for traceability)
 
