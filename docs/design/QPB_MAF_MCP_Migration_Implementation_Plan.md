@@ -840,7 +840,10 @@ contracts on the selected acceptance target.
 - Operator decisions 2026-10-21: role-map coverage stays an observation; the live Debian run on the acceptance target is postponed and not required
   for M3; a target that already tracks `quality/` is audited from a worktree without that folder (implemented in tool `0.1.0-m3.11`, found when the
   Copilot Chat check was pointed at this repository and blocked at Phase 0 with `stale_quality_dir`).
-- **Open:** the manual VS Code Copilot Chat check (rerun on m3.11); the default Phase 1 model (haiku was inadequate on spectre.console).
+- VS Code Copilot Chat drove the installed tool (m3.10) to a completed Phase 1 job on the small fixture (46 model calls, two repairs; verified from the
+  job database, not from Chat's text).
+- **Stop/go: met, with stated limits** (live Debian acceptance run postponed by the operator; Debian covered by the scripted lifecycle and
+  confirmation suites). **Open:** the default Phase 1 model (haiku was inadequate on spectre.console).
 
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
