@@ -821,7 +821,7 @@ not `dotnet run`.
 Code on both OSes, resumes truthfully, and preserves validator/provenance
 contracts on the selected acceptance target.
 
-**M3 status (2026-10-21): implemented and verified except the stop/go's client and target clauses.** Evidence is in the host repo's
+**M3 status (2026-10-21): GATE CLOSED by the operator, with waivers (below).** Evidence is in the host repo's
 `docs/m3/README.md`.
 - Job store (SQLite), lifecycle, leases, target lock, cancellation, artifact access, pending input over the accepted confirmation channel, and
   eight MCP tools plus `qpb_ping` (`qpb_recheck` waits for M8). Phase 1 only, disclosed in every result.
@@ -842,8 +842,13 @@ contracts on the selected acceptance target.
   Copilot Chat check was pointed at this repository and blocked at Phase 0 with `stale_quality_dir`).
 - VS Code Copilot Chat drove the installed tool (m3.10) to a completed Phase 1 job on the small fixture (46 model calls, two repairs; verified from the
   job database, not from Chat's text).
-- **Stop/go: met, with stated limits** (live Debian acceptance run postponed by the operator; Debian covered by the scripted lifecycle and
-  confirmation suites). Operator decision 2026-10-21: the default Phase 1 model is sonnet-5.5 (tool `0.1.0-m3.12`).
+- Operator decision 2026-10-21: the default Phase 1 model is sonnet-5.5 (tool `0.1.0-m3.12`).
+- **Gate closed by the operator on 2026-10-21 (repositories pushed), with these waivers:**
+  1. The live Debian 13 run on the acceptance target is postponed and not required (stated earlier by the operator).
+  2. Neither Claude Code nor VS Code Copilot Chat has driven the tool on Debian 13; the stop/go's "both OSes" clause for the clients is accepted as not met. Debian is covered only by the scripted installed-tool lifecycle (41 checks) and confirmation (13 checks) suites and the unit tests (tool m3.11).
+  3. Claude Code drove the tool with the scripted backend, not a live model; the Copilot Chat run used haiku-5.5 on the small fixture, on tool m3.10, and needed two repairs.
+  4. Role-map coverage is an observation, not enforced (33% on spectre.console).
+  5. On the acceptance target one completion (sonnet-5.5, Windows) is the evidence; it is not a success rate. The Debian checks ran on m3.11, before the default-model change to m3.12.
 
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
