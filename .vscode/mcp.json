@@ -1,0 +1,9 @@
+{ 
+    "servers": { 
+        "quality-playbook": { 
+            "type": "stdio", 
+            "command": "C:\\Sources\\CSharp\\QualityPlaybook.Agent\\src\\QualityPlaybook.Mcp\\bin\\Release\\net10.0\\qpb-agent.exe", 
+            "args": ["serve"] 
+        } 
+    }
+}

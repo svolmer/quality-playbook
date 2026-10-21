@@ -821,6 +821,19 @@ not `dotnet run`.
 Code on both OSes, resumes truthfully, and preserves validator/provenance
 contracts on the selected acceptance target.
 
+**M3 status (2026-10-21): implemented and verified except the stop/go's client and target clauses.** Evidence is in the host repo's
+`docs/m3/README.md`.
+- Job store (SQLite), lifecycle, leases, target lock, cancellation, artifact access, pending input over the accepted confirmation channel, and
+  eight MCP tools plus `qpb_ping` (`qpb_recheck` waits for M8). Phase 1 only, disclosed in every result.
+- Verified against the **installed** tool on Windows and Debian 13: persisted `runId` while a blocked task runs, cancel, crash and restart, duplicate
+  resume, conflicts, lost response, version mismatch, traversal, stdout cleanliness, source unchanged, and (Debian, real pty) genuine operator
+  confirmation with a model-authored attempt rejected.
+- A **live** Phase 1 run on the small fixture completed with haiku (16 model calls; 174 across four runs, 400 allowed). Three earlier runs were
+  correctly blocked by the real validators, which exposed two prompt-versus-validator contradictions (CC-23, CC-24, not yet in the fork) and
+  that the host must render `PROGRESS.md` itself from the run-state log (CC-25).
+- Claude Code drove the installed tool end to end (headless). **Open:** the manual VS Code Copilot Chat check; the spectre.console acceptance run,
+  which needs its own live-call allowance; the operator's decision on CC-23 and CC-24.
+
 ### M4 - Preserve Phase 2 generation, human validation, and personas
 
 **Depends on:** M3.
