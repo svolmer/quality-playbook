@@ -204,6 +204,9 @@ def build_review_summary(merge_result, candidate_bucket: Optional[Sequence[dict]
         "conflicts": conflicts,
         "conflict_count": len(conflicts),
         "candidates": candidates,
+        # Compatibility fork (CC-27): additions folded into an earlier one that rests on the same passage; listed so nothing is dropped silently.
+        "merged_duplicates": list(getattr(merge_result, "merged_duplicates", None) or []),
+        "merged_duplicate_count": len(getattr(merge_result, "merged_duplicates", None) or []),
         "maturity_disclosure": maturity_disclosure(all_items),
     }
 
@@ -318,6 +321,14 @@ def persona_review_disclosure(review_summary: Optional[dict]) -> Optional[str]:
         lines.append(f"- Read {_plural(confirmed, 'requirement', 'requirements')} "
                      f"and agreed with {'it' if confirmed == 1 else 'them'} as "
                      "written — nothing changed there.")
+    folded = int(review_summary.get("merged_duplicate_count") or 0)
+    if folded:
+        lines.append(
+            f"- Folded {_plural(folded, 'suggestion', 'suggestions')} into "
+            f"{'a requirement' if folded == 1 else 'requirements'} another reviewer had already "
+            "added from the same passage of your documents, so you do not get the same requirement twice. "
+            f"They are listed in `{REVIEW_SUMMARY_PATH}`."
+        )
     if set_aside:
         lines.append(
             f"- Set aside {_plural(set_aside, 'suggestion', 'suggestions')} they "

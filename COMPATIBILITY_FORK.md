@@ -24,6 +24,9 @@ resolution below on 2026-10-14:
 - **`v1.6.0-maf.4`**: CC-23 and CC-24, found by the host's first live Phase 1 run (M3):
   two places where the Phase 1 prompt taught a form the Phase 1 validator does not
   accept. Prose only; the validator is unchanged and stays strict.
+- **`v1.6.0-maf.5`**: CC-26 and CC-27, found by the host's live runs of the expert-review pass (M4): a grounded `correct` that leaves a Tier 3
+  record carrying a citation block (which the Phase 6 gate rejects), and reviewers that each add the same requirement. Code in
+  `persona_merge.py` and `persona_apply.py`; no validator or gate check is changed.
 
 ## Identity and version
 
@@ -37,7 +40,7 @@ resolution below on 2026-10-14:
   stamp-consistency checks. The fork identity is recorded here and in the
   host's `deps/quality-playbook.lock.json` (`compatibilityFork`) instead.
 - **Releases** are annotated tags: `v1.6.0-maf.1` (`23a5067`),
-  `v1.6.0-maf.2` (`1319df0`), `v1.6.0-maf.3` and `v1.6.0-maf.4` (both on this branch, see the tags). **The tags are the release identity, and the
+  `v1.6.0-maf.2` (`1319df0`), `v1.6.0-maf.3`, `v1.6.0-maf.4` and `v1.6.0-maf.5` (all on this branch, see the tags). **The tags are the release identity, and the
   hosts pin by commit.** After the rebase described below they mark the
   pre-rebase commits, which are no longer on the branch.
 
@@ -374,6 +377,52 @@ citation, and that a bulleted list is not counted.
 
 `PROGRESS.md` (host CC-25): a weaker model also ignored the exact checkbox template. The prompt's template is already exact and the validator's
 rule is documented; the host renders the file from the run-state log when it is the only failure, as the Mode B runner does. No fork change.
+
+## v1.6.0-maf.5
+
+Two defects in the expert-review (persona) merge, both found by real model runs of the host's M4 pass (claude sonnet-5.5 through the Copilot SDK,
+run G on Results and the spectre.console run). Code only, in `persona_merge.py` and `persona_apply.py`. **No validator or gate check is changed or
+relaxed**: the Phase 6 gate that rejected the first defect is right, and stays as it is.
+
+### CC-26: a grounded `correct` leaves the old tier next to the new citation
+
+**Contradiction.** `schemas.md` (invariant 1) says a record carrying a citation block is Tier 1 or 2, and the Phase 6 gate fails a Tier 3 record
+that has one ("tier 3 but carries a citation block"). The merge's `add` path backfills the cited document's tier. The `correct` path set
+`source_type` and `citation` and kept the record's old `tier`, so correcting a Tier 3 requirement against a Tier 1 document produced exactly the
+record the gate rejects. `classify_move` already stamps the cited document's tier on every grounded move; the `correct` path ignored it.
+
+**Resolution.** `_apply_move`'s `correct` branch now takes `move["tier"]` when the grounded move carries one. A move without a tier leaves the
+record's tier alone, and no other record is touched.
+
+### CC-27: reviewers add the same requirement more than once
+
+**Contradiction.** Reviewers read the same documentation blind, so each adds the requirement one sentence implies, worded differently. The merge
+deduplicated by exact content only (`_dedup_key`), so none of those were seen as one: in run G eight additions rested on two sentences and came out as
+two requirements stated four times each (REQ-003..REQ-010).
+
+**Resolution.** After the exact-content rule, `_collapse_same_passage` folds an `add` into an earlier one when **all** of these hold: same section,
+same document, same cited excerpt (whitespace normalized), and the two say the same thing (equal normalized title, or token Jaccard of title plus
+conditions of satisfaction >= 0.5). The first stays; the rest are listed, with both personas and titles, in `MergeResult.merged_duplicates`, in the
+review summary (`merged_duplicates`, `merged_duplicate_count`) and in the end-of-Phase-2 disclosure ("Folded N suggestion(s) into ... requirement(s)
+another reviewer had already added from the same passage"). Nothing is dropped silently.
+
+The rule is deliberately narrow. It does **not** merge two different requirements that cite the same sentence
+(`test_different_adds_to_same_section_both_land` is unchanged and still passes: "one"/"two" with conditions "x"/"y" score 0), adds without a citation,
+adds that target an existing requirement, or anything across sections, documents or passages. The 0.5 threshold was measured on the live
+duplicates: every duplicate pair in run G either shared a title or scored >= 0.52 (range 0.41-0.81 over title plus conditions, 0.41 being a
+same-title pair), and distinct requirements score near 0.
+
+### Tests
+
+- `bin/tests/test_persona_merge_v160.py`: `SamePassageDuplicateTests` (10) and `CorrectTierTests` (3). Same title, same passage, same section lands
+  once and is reported; different titles with overlapping wording merge; three proposals keep the first and report two; different requirements on
+  one sentence both land; a different passage, section or document does not merge; whitespace in the excerpt does not hide a duplicate; adds
+  without a citation are left alone; the summary and disclosure say so (and say nothing when nothing was folded). The correct tests: the cited
+  tier is taken, a move without a tier leaves the tier, other records are untouched. Mutation check executed: with `persona_merge.py` and
+  `persona_apply.py` at the maf.4 text, all 13 new tests fail or error.
+- The persona suites (apply, catalog, grounding, maturity seam, merge, orchestration, pipeline) fail the same set of tests before and after on
+  Windows (the `hash_mismatch` family that already fails at maf.4 on this Windows checkout; clean on Debian). The classifier and
+  prompt-externalization suites pass. No `EXPECTED_HASHES` change: no prompt text changed.
 
 ## Host-side deltas (not in this fork; recorded for traceability)
 

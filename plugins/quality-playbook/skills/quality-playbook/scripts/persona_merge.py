@@ -26,6 +26,7 @@ the off-switch — those are Guard 4 (slice 5). Stdlib-only.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence
 
@@ -72,6 +73,8 @@ class MergeResult:
     held_out: List[dict] = field(default_factory=list)   # moves in a conflict
     remap: Dict[str, str] = field(default_factory=dict)
     renumber_calls: int = 0
+    # Compatibility fork (CC-27): additions folded into an earlier addition that cites the same passage in the same section.
+    merged_duplicates: List[dict] = field(default_factory=list)
 
 
 def _move_target(move: dict) -> Optional[str]:
@@ -132,6 +135,71 @@ def _group_conflict(moves: Sequence[dict]) -> Optional[str]:
     return None
 
 
+# Compatibility fork (CC-27): two additions on one passage are the same requirement when their wording overlaps this much (token Jaccard over
+# title + conditions of satisfaction), or when their titles are equal. Measured on the live duplicates of the spectre/Results runs: the duplicate
+# pairs scored 0.41-0.81 on title+conditions and every one of them either shared a title or scored >= 0.52; distinct requirements citing one
+# sentence ("one"/"two", "x"/"y") score 0.
+_SAME_PASSAGE_SIMILARITY = 0.5
+_STOP_TOKENS = frozenset(
+    "the and for that with are must not any its has have when from this into than then also each every does did was were been being can will shall".split()
+)
+
+
+def _tokens(move: dict) -> frozenset:
+    text = f"{move.get('title') or ''} {move.get('conditions_of_satisfaction') or ''}".lower()
+    return frozenset(w for w in re.findall(r"[a-z0-9]+", text) if len(w) > 2 and w not in _STOP_TOKENS)
+
+
+def _same_requirement(a: dict, b: dict) -> bool:
+    ta, tb = " ".join((a.get("title") or "").lower().split()), " ".join((b.get("title") or "").lower().split())
+    if ta and ta == tb:
+        return True
+    wa, wb = _tokens(a), _tokens(b)
+    return bool(wa | wb) and len(wa & wb) / len(wa | wb) >= _SAME_PASSAGE_SIMILARITY
+
+
+def _passage_key(move: dict):
+    """Compatibility fork (CC-27): where an ``add`` rests, so additions that rest on the same sentence can be compared.
+
+    Blind personas that read the same documentation each add the requirement the same sentence implies, worded differently, so ``_dedup_key`` (exact
+    content) never sees them as one. Additions in the same section that cite the same passage of the same document (the byte-verified excerpt, whitespace
+    normalized) AND say the same thing (``_same_requirement``) are one requirement proposed more than once; two different requirements that happen to
+    cite one sentence stay two. An add with no citation, or one that targets an existing requirement, has no passage key and is left to the
+    exact-content rule."""
+    cit = move.get("citation")
+    if move.get("move") != "add" or move.get("target_req") or not isinstance(cit, dict):
+        return None
+    excerpt = " ".join((cit.get("citation_excerpt") or "").split())
+    if not excerpt:
+        return None
+    document = cit.get("document") or cit.get("document_sha256") or ""
+    return ("add", (move.get("section") or "").strip().casefold(), document, excerpt)
+
+
+def _collapse_same_passage(moves: Sequence[dict]):
+    """Keep the first addition of each requirement and report the rest, so nothing is dropped silently (they are listed in the review summary)."""
+    kept: List[dict] = []
+    kept_by_key: Dict[tuple, List[dict]] = {}
+    merged: List[dict] = []
+    for m in moves:
+        key = _passage_key(m)
+        if key is None:
+            kept.append(m)
+            continue
+        first = next((k for k in kept_by_key.get(key, []) if _same_requirement(k, m)), None)
+        if first is None:
+            kept_by_key.setdefault(key, []).append(m)
+            kept.append(m)
+            continue
+        merged.append({
+            "section": m.get("section"),
+            "document": key[2],
+            "kept_persona": first.get("persona_id"), "kept_title": first.get("title"),
+            "merged_persona": m.get("persona_id"), "merged_title": m.get("title"),
+        })
+    return kept, merged
+
+
 def _apply_move(manifest: dict, move: dict) -> None:
     records = manifest.setdefault("records", [])
     mv = move.get("move")
@@ -157,6 +225,11 @@ def _apply_move(manifest: dict, move: dict) -> None:
                     r["title"] = move["title"]
                 r["source_type"] = "agent-validation"
                 r["citation"] = move.get("citation")
+                # Compatibility fork (CC-26): a record that carries a citation is Tier 1 or 2 (schemas.md section 10, invariant 1). The add path
+                # backfills the cited document's tier; the correct path left the old tier, so a Tier 3 requirement ended up with a citation block
+                # and the Phase 6 gate rejected it. classify_move stamps the cited document's tier on every grounded move.
+                if move.get("tier") is not None:
+                    r["tier"] = move["tier"]
                 break
     elif mv == "drop":
         manifest["records"] = [r for r in records if r.get("id") != move.get("req_id")]
@@ -214,6 +287,8 @@ def merge_personas(grounded_by_persona: Sequence[dict], base_manifest: dict) -> 
     # (two blind personas proposing the same missing REQ is agreement, not two
     # duplicate REQ records — self-Council Panelist C).
     to_apply = _dedup(to_apply)
+    # Compatibility fork (CC-27): additions that rest on the same passage are one requirement, however each reviewer worded it.
+    to_apply, merged_duplicates = _collapse_same_passage(to_apply)
 
     # Apply the non-conflicting moves to the base manifest.
     manifest = base_manifest
@@ -226,4 +301,5 @@ def merge_personas(grounded_by_persona: Sequence[dict], base_manifest: dict) -> 
     return MergeResult(
         manifest=manifest, conflicts=conflicts, applied=to_apply,
         held_out=held_out, remap=remap, renumber_calls=1,
+        merged_duplicates=merged_duplicates,
     )
