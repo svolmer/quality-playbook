@@ -893,8 +893,12 @@ repo's `docs/m4/README.md`.
   repository's own test project (54 tests, 31 pass, 23 fail on real divergences from the requirements, none a setup error); one Results file does not compile (it uses the library's `internal`
   members), which no validator in QPB or the host detects. The model also wrote four different kinds of functional test from the same prompt (fail-on-defect, skip-the-defect,
   pin-today's-behaviour, non-compiling).
+- **Host compile check built (required by the operator, tool `0.1.0-m4.9`):** a C# functional test is built inside the target's own test project in a separate checkout (policy-checked
+  `dotnet restore`/`build`), a Python one is parsed; errors go back to the agent, a target with nothing to compile it with or a check that cannot be made is reported and never counted as a pass.
+  Replayed with the scripted backend over the saved live artifacts: run F's real file fails with its 15 errors and the repair compiles; spectre.console's real file builds in
+  `src/Spectre.Console.Tests`. 221 AgentRuntime and 176 Orchestration tests on Debian 13; 50 installed lifecycle checks on both OSes.
 - **Open for the operator:** close M4 with (1) the agent turn applying an interview correction, addition or drop tested only with a scripted agent, no operator having run an interview
-  against a live generation; (2) the two QPB defects above and the generated-test findings, with or without a fork release or a host compile check first.
+  against a live generation; (2) the two QPB defects above, with or without a fork release first; (3) the model's varying idea of a functional test (fail on the defect, skip it, pin today's behaviour).
 
 ### M5 - Preserve Phase 3 three-pass review and derivation/divergence
 
