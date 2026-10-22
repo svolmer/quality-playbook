@@ -871,7 +871,7 @@ adds, conflict handling, and `agent-validation` versus human provenance.
 manufactured human confirmation or source-fed persona. Static golden files do
 not prove live prompt fidelity: perform live generation checks.
 
-**M4 status (2026-10-22): implemented and verified; awaiting the operator's decision to close, with three live limits stated.** Evidence is in the host
+**M4 status (2026-10-22): implemented and verified; awaiting the operator's decision to close, with the limits stated below.** Evidence is in the host
 repo's `docs/m4/README.md`.
 - `qpb_run through=2` generates Phase 2 with the original prompt through MAF, under a writable-artifact policy; the host runs the validators the prompt asks the
   agent to run (phase-boundary, run-state contract, the gate's render-contract / ledger / functional-test / review checks, the mechanical verifier). CC-19 is closed
@@ -899,8 +899,13 @@ repo's `docs/m4/README.md`.
   `src/Spectre.Console.Tests`. 221 AgentRuntime and 176 Orchestration tests on Debian 13; 50 installed lifecycle checks on both OSes.
 - **Live run of the new prompt (520 of 600 calls):** on `Results` the generated test compiled on the first attempt, the job reported it, and an independent build and run of the file passes all 45
   tests. One sample.
+- **Fork release `v1.6.0-maf.5` (operator instruction 2026-10-22):** CC-26 (a grounded `correct` takes the cited document's tier) and CC-27 (additions citing the same passage in the same section
+  and saying the same thing are folded into the first and reported). Commit `c9b7d21`, local until pushed; no prompt or gate change; host re-pinned (payload `67c41d97...`, tool `0.1.0-m4.10`).
+  Verified offline: fork unit tests with a mutation check, a host pipeline test, and a replay of run G (21 requirements become 15). **Not re-run live or through the Phase 6 gate.**
+  221 AgentRuntime and 177 Orchestration tests on Debian 13 and on Windows; 50 lifecycle, 13 confirmation and 18 interview checks on Debian. One unexplained one-off Windows failure in a first full run.
 - **Open for the operator:** close M4 with (1) the agent turn applying an interview correction, addition or drop tested only with a scripted agent, no operator having run an interview
-  against a live generation; (2) the two QPB defects above, with or without a fork release first; (3) the model's varying idea of a functional test (fail on the defect, skip it, pin today's behaviour).
+  against a live generation; (2) the maf.5 fixes verified offline only; (3) the model's varying idea of a functional test (fail on the defect, skip it, pin today's behaviour); (4) pushing the
+  fork branch and tag, which has not been done.
 
 ### M5 - Preserve Phase 3 three-pass review and derivation/divergence
 
