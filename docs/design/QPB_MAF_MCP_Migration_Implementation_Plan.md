@@ -885,9 +885,12 @@ repo's `docs/m4/README.md`.
   (the host now checks the audited commit out as committed; verified offline with tests that fail without the fix, **not re-run live**).
 - Tests, tool `0.1.0-m4.8`: 221 AgentRuntime and 162 Orchestration on Debian 13; 50 installed lifecycle checks on Windows and Debian; 13 confirmation and 18 interview
   checks (real pty) on Debian.
-- **Open for the operator:** close M4 with the limits that (1) the agent turn applying an interview correction, addition or drop was tested with a scripted agent, and no operator has
-  run an interview against a live generation; (2) a live reviewer add that grounds and is applied was proved with a controlled reviewer after the fix, not observed with a model
-  (about 65 calls would do it); (3) generated functional tests were not compiled or run against the target.
+- **Live grounded reviewer add observed (2026-10-22, 454 of 600 calls):** with a citable contract document the reviewers' backed changes were applied (8 additions, 1 correction,
+  host-computed byte-verified excerpts, Tier 1), re-rendered and the job completed. It also showed two QPB defects: reviewers duplicate each other and the merge keys on exact
+  text (eight near-identical additions from four reviewers), and a grounded `correct` leaves a Tier 3 record carrying a citation, which QPB's own Phase 6 gate rejects (a fork
+  change like CC-26 would set the tier from the cited document, as the add path does).
+- **Open for the operator:** close M4 with (1) the agent turn applying an interview correction, addition or drop tested only with a scripted agent, no operator having run an interview
+  against a live generation; (2) generated functional tests not compiled or run against the target; (3) the two QPB defects above, with or without a fork release first.
 
 ### M5 - Preserve Phase 3 three-pass review and derivation/divergence
 
