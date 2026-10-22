@@ -897,6 +897,8 @@ repo's `docs/m4/README.md`.
   `dotnet restore`/`build`), a Python one is parsed; errors go back to the agent, a target with nothing to compile it with or a check that cannot be made is reported and never counted as a pass.
   Replayed with the scripted backend over the saved live artifacts: run F's real file fails with its 15 errors and the repair compiles; spectre.console's real file builds in
   `src/Spectre.Console.Tests`. 221 AgentRuntime and 176 Orchestration tests on Debian 13; 50 installed lifecycle checks on both OSes.
+- **Live run of the new prompt (520 of 600 calls):** on `Results` the generated test compiled on the first attempt, the job reported it, and an independent build and run of the file passes all 45
+  tests. One sample.
 - **Open for the operator:** close M4 with (1) the agent turn applying an interview correction, addition or drop tested only with a scripted agent, no operator having run an interview
   against a live generation; (2) the two QPB defects above, with or without a fork release first; (3) the model's varying idea of a functional test (fail on the defect, skip it, pin today's behaviour).
 
