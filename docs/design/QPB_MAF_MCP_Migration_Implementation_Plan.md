@@ -871,6 +871,24 @@ adds, conflict handling, and `agent-validation` versus human provenance.
 manufactured human confirmation or source-fed persona. Static golden files do
 not prove live prompt fidelity: perform live generation checks.
 
+**M4 status (2026-10-22): implemented and verified; awaiting the operator's decision to close, with three live limits stated.** Evidence is in the host
+repo's `docs/m4/README.md`.
+- `qpb_run through=2` generates Phase 2 with the original prompt through MAF, under a writable-artifact policy; the host runs the validators the prompt asks the
+  agent to run (phase-boundary, run-state contract, the gate's render-contract / ledger / functional-test / review checks, the mechanical verifier). CC-19 is closed
+  by host receipts for every ledger line and a cross-check that fails the run on a forged, altered, reordered or removed line, or on provenance no receipt accounts for.
+  The interview is the operator's own terminal command; the expert review runs QPB's `run_feature_h` through the embedded driver with isolated one-tool reviewer sessions,
+  host-computed citation excerpts, a receipt, a re-render the agent cannot use to change the manifest, the disclosure, and an undo.
+- Live (sonnet-5.5, 389 of 600 allowed calls): Phase 1 and 2 completed on `Results` (several runs) and on **spectre.console@bbbb5729** (81 calls, 815 s; 12 product
+  requirements, all references resolve, two spot-checked claims accurate; 8 reviewer confirmations applied, 25 candidates held for the operator, no conflicts).
+- Live runs found two defects the unit tests could not: a model reads the guide and skips the templates it points to (fixed in the host notes; protocols 2 to 3 times
+  longer), and on a Windows checkout every reviewer citation failed `hash_mismatch` because QPB's ingest and citation verifier hash different bytes for CRLF documents
+  (the host now checks the audited commit out as committed; verified offline with tests that fail without the fix, **not re-run live**).
+- Tests, tool `0.1.0-m4.8`: 221 AgentRuntime and 162 Orchestration on Debian 13; 50 installed lifecycle checks on Windows and Debian; 13 confirmation and 18 interview
+  checks (real pty) on Debian.
+- **Open for the operator:** close M4 with the limits that (1) the agent turn applying an interview correction, addition or drop was tested with a scripted agent, and no operator has
+  run an interview against a live generation; (2) a live reviewer add that grounds and is applied was proved with a controlled reviewer after the fix, not observed with a model
+  (about 65 calls would do it); (3) generated functional tests were not compiled or run against the target.
+
 ### M5 - Preserve Phase 3 three-pass review and derivation/divergence
 
 **Depends on:** M4.
