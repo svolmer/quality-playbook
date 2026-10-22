@@ -889,8 +889,12 @@ repo's `docs/m4/README.md`.
   host-computed byte-verified excerpts, Tier 1), re-rendered and the job completed. It also showed two QPB defects: reviewers duplicate each other and the merge keys on exact
   text (eight near-identical additions from four reviewers), and a grounded `correct` leaves a Tier 3 record carrying a citation, which QPB's own Phase 6 gate rejects (a fork
   change like CC-26 would set the tier from the cited document, as the add path does).
+- **Generated tests compiled and run (2026-10-22):** the seven live `test_functional.cs` files were run in the targets' own test projects. Six compile; the spectre.console one builds in the
+  repository's own test project (54 tests, 31 pass, 23 fail on real divergences from the requirements, none a setup error); one Results file does not compile (it uses the library's `internal`
+  members), which no validator in QPB or the host detects. The model also wrote four different kinds of functional test from the same prompt (fail-on-defect, skip-the-defect,
+  pin-today's-behaviour, non-compiling).
 - **Open for the operator:** close M4 with (1) the agent turn applying an interview correction, addition or drop tested only with a scripted agent, no operator having run an interview
-  against a live generation; (2) generated functional tests not compiled or run against the target; (3) the two QPB defects above, with or without a fork release first.
+  against a live generation; (2) the two QPB defects above and the generated-test findings, with or without a fork release or a host compile check first.
 
 ### M5 - Preserve Phase 3 three-pass review and derivation/divergence
 
