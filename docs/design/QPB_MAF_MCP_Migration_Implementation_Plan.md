@@ -923,6 +923,20 @@ Codex/Cursor phase CLIs.
 **Stop/go:** required review artifacts and prerequisites pass for Code/Skill
 roles as applicable. Unsupported required nested reasoning blocks the run.
 
+**M5 status (2026-10-26): implemented and verified; awaiting the operator's decision to close, with the limits stated below.** Evidence is in the host repo's `docs/m5/README.md`.
+- `qpb_run through=3` runs the original Phase 3 prompt through MAF under a write policy, then the host checks what the agent cannot run: the run-state contract, the gate's Phase 3 checks, every patch
+  applied to a clean checkout of the audited commit (a fix on top of its regression-test patch), the added test **compiled** in the target's own test project (C#; Python parsed), `test_regression`
+  compiled, and the bug report cross-checked with its manifest, the requirements and the cited file:line. The regression tests are **not executed** (red/green is M7) and the status says so. When the role
+  map has skill files, the payload's four-pass derivation and the divergence parts run through the M2 mailbox bridge, one entry-point invocation per part, with 0 processes launched by the payload's Python.
+- Live (`claude-sonnet-5.5`, 283 of 600 calls settled): clean `Results` completes Phases 1 to 3 (4 bugs, 8 of 8 patches apply, regression tests compile); seeded `Results` finds **3 of 4** planted defects and the
+  clean control none of them; the skill fixture finds **both** planted defects with 7 model requests. Live runs found three defects the unit tests could not: CC-28 (derivation paths on Windows), CC-29 (the
+  cardinality gate gives the last requirement the Use cases section; the first live Phase 3 run was blocked by it) and a mailbox race on Windows (fixed, verified by a test, **not live**).
+- Fork release `v1.6.0-maf.6` (CC-28, CC-29), local and unpublished; host re-pinned. Tool `0.1.0-m5.3`: 222 AgentRuntime and 224 Orchestration tests on Windows and on Debian 13; installed lifecycle 73 checks on
+  Debian (23 more on Windows for the new scenarios), confirmation 13, interview 18.
+- **Open for the operator:** close M5 with (1) no live negative control for the model-judged prose-to-code part (interrupted by the mailbox race, then the Copilot account's monthly quota ended; the quota also blocks any
+  further live run until it is raised or renewed); (2) recall of 3 of 4 on one sample of one model; (3) writeups deferred to Phase 5 (the contract places them there) and divergence bug records kept in `quality/phase3/`
+  rather than merged into `BUGS.md`; (4) the unpublished fork release.
+
 ### M6 - Preserve Phase 4 independent Council and citation review
 
 **Depends on:** M5.
